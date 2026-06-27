@@ -42,8 +42,12 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
-echo "==> building API image (first build compiles Rust deps — a few minutes)"
-docker build -t "$IMAGE" .
+if [[ -n "${FORCE_REBUILD:-}" ]] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "==> building API image (first build compiles Rust deps — a few minutes)"
+  docker build -t "$IMAGE" .
+else
+  echo "==> API image '$IMAGE' already built — skipping (FORCE_REBUILD=1 to rebuild)"
+fi
 
 echo "==> (re)starting API container '$API_NAME'"
 docker rm -f "$API_NAME" >/dev/null 2>&1 || true
