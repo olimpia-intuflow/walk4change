@@ -8,7 +8,6 @@ import { FootstepTrail } from '../components/Footsteps'
 import { api, INTEREST_OPTIONS, type Profile as ProfileT } from '../lib/api'
 import { getInterests, saveInterests } from '../lib/interests'
 import { getGender, saveGender, type Gender } from '../lib/settings'
-import { setAuthed } from '../lib/auth'
 
 export function Profile() {
   const nav = useNavigate()
@@ -148,15 +147,6 @@ export function Profile() {
           ))}
         </div>
 
-        <button
-          onClick={() => {
-            setAuthed(false)
-            nav('/login')
-          }}
-          className="mt-6 w-full rounded-2xl border border-white/70 bg-white/70 py-3 text-sm font-bold text-muted transition active:scale-95"
-        >
-          Wyloguj się
-        </button>
       </div>
     </div>
   )
