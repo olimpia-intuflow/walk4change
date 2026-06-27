@@ -3,7 +3,7 @@ import { House, Footprints, UsersThree, CalendarHeart, Storefront, UserCircle } 
 import { Logo } from './Logo'
 
 const items = [
-  { to: '/', label: 'Start', icon: House, owns: ['/', '/eco'] },
+  { to: '/app', label: 'Start', icon: House, owns: ['/app', '/eco'] },
   { to: '/walk', label: 'Spacer', icon: Footprints, owns: ['/walk', '/history'] },
   { to: '/community', label: 'Ludzie', icon: UsersThree, owns: ['/community'] },
   { to: '/events', label: 'Eventy', icon: CalendarHeart, owns: ['/events'] },

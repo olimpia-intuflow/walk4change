@@ -12,7 +12,7 @@ export function Login() {
 
   const enter = () => {
     setAuthed(true)
-    nav('/')
+    nav('/app')
   }
 
   return (
