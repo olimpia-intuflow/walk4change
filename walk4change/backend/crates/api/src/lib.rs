@@ -1,9 +1,14 @@
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 pub mod auth;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod models;
+pub mod repo;
 pub mod response;
 pub mod scoring;
 pub mod state;
@@ -17,14 +22,13 @@ pub fn router_health() -> Router {
 }
 
 /// Full application router backed by [`AppState`].
-///
-/// Includes every route registered so far:
-/// - `GET /api/v1/health` — liveness probe (no auth required).
-/// - `GET /api/v1/_whoami` — returns the authenticated user's UUID.
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/v1/health", get(|| async { "ok" }))
         .route("/api/v1/_whoami", get(whoami))
+        .route("/api/v1/auth/register", post(auth::handlers::register))
+        .route("/api/v1/auth/login", post(auth::handlers::login))
+        .route("/api/v1/auth/logout", post(auth::handlers::logout))
         .with_state(state)
 }
 
