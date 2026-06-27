@@ -6,6 +6,7 @@ import { Logo } from '../components/Logo'
 import { ModeToggle } from '../components/ModeToggle'
 import { FootstepTrail } from '../components/Footsteps'
 import { Card, Pill, ProgressBar } from '../components/ui'
+import { SponsorIcon } from '../components/SponsorIcon'
 import { useMode } from '../lib/mode'
 import { api, type TodayStats, type Reward, type TeamToday, type Sponsor } from '../lib/api'
 
@@ -218,8 +219,8 @@ export function Home() {
               onClick={() => nav('/partners')}
               className="glass flex w-40 shrink-0 flex-col rounded-3xl p-3 text-left transition active:scale-95"
             >
-              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sea/12 to-leaf/15 text-2xl">
-                {s.icon}
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sea/12 to-leaf/15 text-sea">
+                <SponsorIcon keyName={s.iconKey} size={24} />
               </div>
               <div className="mt-2 text-sm font-bold leading-tight text-ink">{s.name}</div>
               <div className="text-xs text-muted">{s.category}</div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { Storefront, MapPin, Ticket, HandHeart } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton } from '../components/ui'
+import { SponsorIcon } from '../components/SponsorIcon'
 import { api, type Sponsor } from '../lib/api'
 
 export function Partners() {
@@ -32,8 +33,8 @@ export function Partners() {
             <motion.div key={s.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
               <Card className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-sea/12 to-leaf/15 text-3xl">
-                    {s.icon}
+                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-sea/12 to-leaf/15 text-sea">
+                    <SponsorIcon keyName={s.iconKey} size={28} />
                   </div>
                   <div className="flex-1">
                     <div className="font-display text-lg font-bold leading-tight text-ink">{s.name}</div>

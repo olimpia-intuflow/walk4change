@@ -186,22 +186,24 @@ const people: MatchPerson[] = [
 ]
 
 // ── Lokalni partnerzy / sponsorzy ─────────────────────────
+export type SponsorIconKey = 'boat' | 'sup' | 'bike' | 'coffee' | 'sail'
+
 export interface Sponsor {
   id: string
   name: string
   category: string
   offer: string
   pointsCost: number
-  icon: string
+  iconKey: SponsorIconKey
   place: string
 }
 
 const sponsors: Sponsor[] = [
-  { id: 'sp1', name: 'Kajaki Zatoka', category: 'Wypożyczalnia kajaków', offer: '−20% na spływ', pointsCost: 120, icon: '🛶', place: 'Marina Gdynia' },
-  { id: 'sp2', name: 'SUP Sopot', category: 'Deski SUP', offer: '1h gratis przy 2h', pointsCost: 150, icon: '🏄', place: 'Molo Sopot' },
-  { id: 'sp3', name: 'Rowery Nadmorskie', category: 'Wypożyczalnia rowerów', offer: '−15% na dzień', pointsCost: 80, icon: '🚲', place: 'Bulwar Nadmorski' },
-  { id: 'sp4', name: 'Przystań Kawa', category: 'Kawiarnia nad wodą', offer: 'Kawa −50%', pointsCost: 60, icon: '☕', place: 'Brzeźno' },
-  { id: 'sp5', name: 'Szkoła Żeglarstwa', category: 'Rejsy i lekcje', offer: 'Lekcja próbna −30%', pointsCost: 200, icon: '⛵', place: 'Górki Zachodnie' },
+  { id: 'sp1', name: 'Kajaki Zatoka', category: 'Wypożyczalnia kajaków', offer: '−20% na spływ', pointsCost: 120, iconKey: 'boat', place: 'Marina Gdynia' },
+  { id: 'sp2', name: 'SUP Sopot', category: 'Deski SUP', offer: '1h gratis przy 2h', pointsCost: 150, iconKey: 'sup', place: 'Molo Sopot' },
+  { id: 'sp3', name: 'Rowery Nadmorskie', category: 'Wypożyczalnia rowerów', offer: '−15% na dzień', pointsCost: 80, iconKey: 'bike', place: 'Bulwar Nadmorski' },
+  { id: 'sp4', name: 'Przystań Kawa', category: 'Kawiarnia nad wodą', offer: 'Kawa −50%', pointsCost: 60, iconKey: 'coffee', place: 'Brzeźno' },
+  { id: 'sp5', name: 'Szkoła Żeglarstwa', category: 'Rejsy i lekcje', offer: 'Lekcja próbna −30%', pointsCost: 200, iconKey: 'sail', place: 'Górki Zachodnie' },
 ]
 
 // ── Wariant korporacyjny (B2B) ────────────────────────────
