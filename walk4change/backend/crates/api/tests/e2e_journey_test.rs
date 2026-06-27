@@ -386,6 +386,25 @@ async fn full_user_journey() {
         "Bek's leaderboard entry must have total_points"
     );
 
+    // Assert ordering: the array must be non-increasing in total_points.
+    // total_points serialises as a JSON string (rust_decimal with plain serde feature).
+    let parsed_totals: Vec<Decimal> = entries
+        .iter()
+        .filter_map(|e| {
+            e["total_points"]
+                .as_str()
+                .and_then(|s| s.parse::<Decimal>().ok())
+        })
+        .collect();
+    for window in parsed_totals.windows(2) {
+        assert!(
+            window[0] >= window[1],
+            "leaderboard must be ordered by total_points DESC, but {} < {} was found",
+            window[0],
+            window[1]
+        );
+    }
+
     // ── 8. Redeem a reward ────────────────────────────────────────────────────
 
     // Read Ana's actual earned points from DB (avoids fragile point-math assumptions).
