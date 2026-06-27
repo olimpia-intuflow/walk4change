@@ -1,13 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { Footprints, Flame, Leaf, UsersThree, CalendarHeart, Warning, Sparkle, Buildings } from '@phosphor-icons/react'
+import { Footprints, Flame, Leaf, UsersThree, CalendarHeart, Warning, Sparkle, Buildings, Storefront, CaretRight } from '@phosphor-icons/react'
 import { Logo } from '../components/Logo'
 import { ModeToggle } from '../components/ModeToggle'
 import { FootstepTrail } from '../components/Footsteps'
 import { Card, Pill, ProgressBar } from '../components/ui'
 import { useMode } from '../lib/mode'
-import { api, type TodayStats, type Reward, type TeamToday } from '../lib/api'
+import { api, type TodayStats, type Reward, type TeamToday, type Sponsor } from '../lib/api'
 
 function Ring({ value, children }: { value: number; children: ReactNode }) {
   const r = 52
@@ -55,12 +55,14 @@ export function Home() {
   const [team, setTeam] = useState<TeamToday | null>(null)
   const [rewards, setRewards] = useState<Reward[]>([])
   const [teamRewards, setTeamRewards] = useState<Reward[]>([])
+  const [sponsors, setSponsors] = useState<Sponsor[]>([])
 
   useEffect(() => {
     api.getToday().then(setToday)
     api.getRewards().then(setRewards)
     api.getTeamToday().then(setTeam)
     api.getTeamRewards().then(setTeamRewards)
+    api.getSponsors().then(setSponsors)
   }, [])
 
   const isTeam = mode === 'team'
@@ -199,7 +201,35 @@ export function Home() {
         </div>
       </motion.div>
 
-      <motion.p {...fade(6)} className="mt-6 text-center text-xs leading-relaxed text-muted">
+      {/* lokalni partnerzy */}
+      <motion.div {...fade(6)} className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+            <Storefront size={18} className="text-sea" /> Lokalni partnerzy
+          </h2>
+          <button onClick={() => nav('/partners')} className="inline-flex items-center gap-0.5 text-sm font-bold text-sea">
+            Wszystkie <CaretRight size={14} />
+          </button>
+        </div>
+        <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
+          {sponsors.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => nav('/partners')}
+              className="glass flex w-40 shrink-0 flex-col rounded-3xl p-3 text-left transition active:scale-95"
+            >
+              <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sea/12 to-leaf/15 text-2xl">
+                {s.icon}
+              </div>
+              <div className="mt-2 text-sm font-bold leading-tight text-ink">{s.name}</div>
+              <div className="text-xs text-muted">{s.category}</div>
+              <span className="mt-2 inline-flex w-fit rounded-full bg-leaf/15 px-2 py-0.5 text-xs font-bold text-[#2f7a45]">{s.offer}</span>
+            </button>
+          ))}
+        </div>
+      </motion.div>
+
+      <motion.p {...fade(7)} className="mt-6 text-center text-xs leading-relaxed text-muted">
         {isTeam ? 'Razem robicie więcej — i dla zespołu, i dla Bałtyku 🌊' : 'Każdy krok liczy się podwójnie, gdy idziesz nad wodą 🌊'}
       </motion.p>
     </div>
