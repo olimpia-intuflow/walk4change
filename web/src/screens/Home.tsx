@@ -73,7 +73,9 @@ export function Home() {
   return (
     <div className="px-5 pt-5">
       <motion.div {...fade(0)} className="flex items-center justify-between">
-        <Logo />
+        <div className="lg:invisible">
+          <Logo />
+        </div>
         <div className="flex items-center gap-2">
           <ModeToggle />
           <Avatar name="Ola" size={40} />
@@ -219,12 +221,12 @@ export function Home() {
             Wszystkie <CaretRight size={14} />
           </button>
         </div>
-        <div className="no-scrollbar -mx-5 flex gap-3 overflow-x-auto px-5">
-          {sponsors.map((s) => (
+        <div className="grid grid-cols-2 gap-3">
+          {sponsors.slice(0, 4).map((s) => (
             <button
               key={s.id}
               onClick={() => nav('/partners')}
-              className="glass flex w-40 shrink-0 flex-col rounded-3xl p-3 text-left transition active:scale-95"
+              className="glass flex flex-col rounded-3xl p-3 text-left transition active:scale-95"
             >
               <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sea/12 to-leaf/15 text-sea">
                 <SponsorIcon keyName={s.iconKey} size={24} />
