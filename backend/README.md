@@ -12,13 +12,15 @@ prod-only; nothing here touches it.
 ```bash
 cd backend
 
-# With the docker compose plugin installed:
-docker compose up --build        # DB + API → http://localhost:8080/api/v1
-
-# Without the compose plugin (plain docker):
+# Plain docker (verified — works without the compose plugin):
 ./scripts/dev-up.sh              # builds image, starts DB + API, waits for health
 ./scripts/seed.sh                # optional: demo users Ana & Bek (password: demodemo)
 ./scripts/dev-down.sh            # stop (add --purge to wipe the DB volume)
+
+# Docker Compose (equivalent, but UNTESTED here — plugin not installed).
+# If you use it, first stop any container already bound to :5433
+# (e.g. the one scripts/dev-up.sh started) to avoid a port clash:
+docker compose up --build        # DB + API → http://localhost:8080/api/v1
 ```
 
 Health check: `curl http://localhost:8080/api/v1/health` → `ok`.
