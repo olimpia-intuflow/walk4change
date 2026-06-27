@@ -41,7 +41,7 @@ pub async fn top_n(pool: &PgPool, n: i64) -> Result<Vec<LeaderboardEntry>, AppEr
         "SELECT ut.user_id, u.display_name, ut.total_points \
          FROM user_totals ut \
          JOIN users u ON u.id = ut.user_id \
-         ORDER BY ut.total_points DESC \
+         ORDER BY ut.total_points DESC, u.display_name ASC, u.id ASC \
          LIMIT $1",
     )
     .bind(n)
@@ -67,7 +67,7 @@ async fn list_leaderboard(
         "SELECT ut.user_id, u.display_name, ut.total_points \
          FROM user_totals ut \
          JOIN users u ON u.id = ut.user_id \
-         ORDER BY ut.total_points DESC \
+         ORDER BY ut.total_points DESC, u.display_name ASC, u.id ASC \
          LIMIT $1 OFFSET $2",
     )
     .bind(pagination.per_page)
