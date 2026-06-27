@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { CaretLeft } from '@phosphor-icons/react'
 
 export function Card({
@@ -68,7 +68,17 @@ export function ScreenHeader({
   showBack?: boolean
 }) {
   const navigate = useNavigate()
-  const goBack = () => (window.history.length > 2 ? navigate(-1) : navigate('/'))
+  const { pathname } = useLocation()
+  // „Wróć" = poziom wyżej w hierarchii, nie cofanie w historii przeglądarki
+  const parents: Record<string, string> = {
+    '/walk': '/',
+    '/community': '/',
+    '/events': '/',
+    '/eco': '/',
+    '/partners': '/',
+    '/history': '/walk',
+  }
+  const goBack = () => navigate(parents[pathname] ?? '/')
   return (
     <header className="px-5 pb-2 pt-4">
       {showBack && (
