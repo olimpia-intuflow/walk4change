@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 use walk4change_api::{build_app, config::AppConfig, db, state::AppState, ws::hub::Hub};
 
@@ -32,5 +33,7 @@ async fn main() {
         .unwrap_or_else(|_| panic!("failed to bind to {bind_addr}"));
 
     tracing::info!("listening on {bind_addr}");
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .unwrap();
 }

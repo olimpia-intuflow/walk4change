@@ -305,3 +305,41 @@ async fn subscribe_non_member_session_yields_error() {
         "non-member subscribe must be an error, got {frame:?}"
     );
 }
+
+/// Spec §271: a participant who LEFT the session cannot subscribe to the live WS stream.
+#[tokio::test]
+async fn left_participant_subscribe_yields_error() {
+    let app = common::spawn().await;
+    let (host_id, host_token) = register_user(&app, "ws_left_host@example.com").await;
+    let (friend_id, friend_token) = register_user(&app, "ws_left_friend@example.com").await;
+
+    make_friends(&app, &host_token, friend_id, &friend_token).await;
+    let session_id = start_walk(&app, &host_token).await;
+    join_walk(&app, session_id, &friend_token).await;
+
+    // Friend leaves the session (left_at is now set).
+    let resp = app
+        .client
+        .post(format!("{}/api/v1/walks/{session_id}/leave", app.base_url))
+        .header("Authorization", format!("Bearer {friend_token}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 204, "leave must return 204");
+
+    // Friend tries to subscribe to the live stream — must be rejected.
+    let mut ws = connect_ws(&app).await;
+    send_json(&mut ws, json!({ "type": "auth", "token": friend_token })).await;
+    send_json(&mut ws, json!({ "type": "subscribe", "session_id": session_id })).await;
+
+    let frame = next_json(&mut ws)
+        .await
+        .expect("left participant subscribe must yield an error frame");
+    assert_eq!(
+        frame["type"], "error",
+        "left participant subscribe must be an error, got {frame:?}"
+    );
+
+    // Suppress unused-variable warnings for host_id (only friend_id matters here).
+    let _ = host_id;
+}

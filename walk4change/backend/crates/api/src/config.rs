@@ -12,6 +12,12 @@ pub struct AppConfig {
     pub argon2_p_cost: u32,
     pub jwt_ttl_secs: i64,
     pub scoring: ScoringConfig,
+    /// Max requests per window for `/api/v1/auth/*` (strict bucket).
+    pub rate_limit_auth_max: u32,
+    /// Max requests per window for all other routes (moderate bucket).
+    pub rate_limit_global_max: u32,
+    /// Sliding-window duration in seconds for rate limiting.
+    pub rate_limit_window_secs: u64,
 }
 
 /// Errors that can occur during configuration loading.
@@ -77,6 +83,21 @@ impl AppConfig {
             .and_then(|v| v.parse().ok())
             .unwrap_or(3600);
 
+        let rate_limit_auth_max: u32 = std::env::var("RATE_LIMIT_AUTH_MAX")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10);
+
+        let rate_limit_global_max: u32 = std::env::var("RATE_LIMIT_GLOBAL_MAX")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(120);
+
+        let rate_limit_window_secs: u64 = std::env::var("RATE_LIMIT_WINDOW_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60);
+
         Ok(Self {
             database_url,
             jwt_secret,
@@ -87,11 +108,15 @@ impl AppConfig {
             argon2_p_cost,
             jwt_ttl_secs,
             scoring: ScoringConfig::from_env_or_default(),
+            rate_limit_auth_max,
+            rate_limit_global_max,
+            rate_limit_window_secs,
         })
     }
 
     /// Returns a valid config for unit tests (no DB or .env required).
     /// Uses OWASP-minimum argon2 params and a 40-char JWT secret.
+    /// Rate limits are intentionally very high so no existing tests trip them.
     pub fn test_default() -> Self {
         Self {
             database_url: "postgres://localhost/walk4change_test".into(),
@@ -103,6 +128,9 @@ impl AppConfig {
             argon2_p_cost: 1,
             jwt_ttl_secs: 3600,
             scoring: ScoringConfig::default(),
+            rate_limit_auth_max: 1_000,
+            rate_limit_global_max: 10_000,
+            rate_limit_window_secs: 60,
         }
     }
 }

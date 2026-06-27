@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::net::SocketAddr;
 use std::sync::Arc;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
@@ -28,19 +29,9 @@ impl TestApp {
     }
 }
 
-/// Spawn a test instance of the API server against `TEST_DATABASE_URL`.
-///
-/// - Acquires a Postgres session advisory lock so that concurrent test
-///   processes are serialized (one truncate + setup at a time).
-/// - Connects a pool
-/// - Runs pending migrations
-/// - TRUNCATEs all tables for test isolation
-/// - Binds the full router (with state) to an ephemeral port
-/// - Returns pool, config, base URL, and a reqwest client
-pub async fn spawn() -> TestApp {
-    let db_url = std::env::var("TEST_DATABASE_URL")
-        .expect("TEST_DATABASE_URL must be set for integration tests");
-
+/// Internal: acquire the DB advisory lock, run migrations, truncate, and bind
+/// the app on an ephemeral port using the given config overrides.
+async fn spawn_inner(mut config: AppConfig, db_url: String) -> TestApp {
     // ── advisory lock ────────────────────────────────────────────────────────
     let guard_pool = PgPoolOptions::new()
         .max_connections(1)
@@ -72,7 +63,6 @@ pub async fn spawn() -> TestApp {
     .await
     .expect("failed to truncate tables for test isolation");
 
-    let mut config = AppConfig::test_default();
     config.database_url = db_url;
     config.jwt_secret = "test-secret-that-is-at-least-32-chars!!".into();
     let config = Arc::new(config);
@@ -91,7 +81,12 @@ pub async fn spawn() -> TestApp {
     let base_url = format!("http://{addr}");
 
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
 
     TestApp {
@@ -101,4 +96,43 @@ pub async fn spawn() -> TestApp {
         config,
         _db_guard: guard_pool,
     }
+}
+
+/// Spawn a test instance of the API server against `TEST_DATABASE_URL`.
+///
+/// - Acquires a Postgres session advisory lock so that concurrent test
+///   processes are serialized (one truncate + setup at a time).
+/// - Connects a pool
+/// - Runs pending migrations
+/// - TRUNCATEs all tables for test isolation
+/// - Binds the full router (with state) to an ephemeral port
+/// - Returns pool, config, base URL, and a reqwest client
+///
+/// Rate limits are intentionally high (1000 / 10000 per window) so no
+/// existing test trips them by accident.
+pub async fn spawn() -> TestApp {
+    let db_url = std::env::var("TEST_DATABASE_URL")
+        .expect("TEST_DATABASE_URL must be set for integration tests");
+
+    spawn_inner(AppConfig::test_default(), db_url).await
+}
+
+/// Spawn a test server with custom rate-limit parameters.
+///
+/// Use this (not `spawn`) from rate-limit tests so you can set a tiny limit
+/// and trigger 429s deterministically without affecting the shared default.
+pub async fn spawn_with_rate_limits(
+    auth_max: u32,
+    global_max: u32,
+    window_secs: u64,
+) -> TestApp {
+    let db_url = std::env::var("TEST_DATABASE_URL")
+        .expect("TEST_DATABASE_URL must be set for integration tests");
+
+    let mut cfg = AppConfig::test_default();
+    cfg.rate_limit_auth_max = auth_max;
+    cfg.rate_limit_global_max = global_max;
+    cfg.rate_limit_window_secs = window_secs;
+
+    spawn_inner(cfg, db_url).await
 }

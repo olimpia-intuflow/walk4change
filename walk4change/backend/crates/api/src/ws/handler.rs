@@ -139,7 +139,11 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                     }
 
                     ClientFrame::Subscribe { session_id } => {
-                        match walk::is_member(&state.pool, session_id, actor).await {
+                        // Spec §271: live subscription requires ACTIVE membership
+                        // (session active AND left_at IS NULL). Historical access
+                        // for members who have left is fine for HTTP GET, but not
+                        // for the live WS stream.
+                        match walk::is_active_participant(&state.pool, session_id, actor).await {
                             Ok(true) => {
                                 if subscriptions.insert(session_id) {
                                     let rx = state.hub.session_sender(session_id).subscribe();
@@ -149,8 +153,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             Ok(false) => {
                                 let _ = sender
                                     .send(Message::Text(
-                                        ServerFrame::error("not a member of this session")
-                                            .to_json(),
+                                        ServerFrame::error(
+                                            "not an active participant of this session",
+                                        )
+                                        .to_json(),
                                     ))
                                     .await;
                             }
