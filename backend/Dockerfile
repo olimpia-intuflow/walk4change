@@ -9,8 +9,9 @@ WORKDIR /build
 # Copy the whole backend crate (target/ excluded via .dockerignore).
 COPY . .
 
-# Build the api package (produces both `walk4change-api` and `seed` binaries).
-RUN cargo build --release -p walk4change-api
+# Build the api package (`walk4change-api` + `seed`) and the replay demo tool
+# (`walk4change-replay`, used to simulate two people walking together).
+RUN cargo build --release -p walk4change-api -p walk4change-replay
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
 # Slim Debian + ca-certificates (rustls verifies TLS against system roots when
@@ -22,8 +23,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /build/target/release/walk4change-api /usr/local/bin/walk4change-api
-COPY --from=builder /build/target/release/seed            /usr/local/bin/seed
+COPY --from=builder /build/target/release/walk4change-api     /usr/local/bin/walk4change-api
+COPY --from=builder /build/target/release/seed                /usr/local/bin/seed
+COPY --from=builder /build/target/release/walk4change-replay  /usr/local/bin/walk4change-replay
+# Demo GPS tracks for the replay tool (resolved relative to WORKDIR /app).
+COPY --from=builder /build/fixtures                           /app/fixtures
 
 ENV BIND_ADDR=0.0.0.0:8080
 EXPOSE 8080
