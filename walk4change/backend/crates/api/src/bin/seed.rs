@@ -9,7 +9,7 @@
 //!
 //! Idempotent: safe to run repeatedly.
 
-use walk4change_api::{config::AppConfig, db, seed};
+use walk4change_api::{auth::jwt, config::AppConfig, db, seed};
 
 #[tokio::main]
 async fn main() {
@@ -35,11 +35,17 @@ async fn main() {
         .await
         .expect("Seed failed");
 
+    let labels = ["Ana (ana@demo.walk4change)", "Bek (bek@demo.walk4change)"];
+
     println!("=== walk4change demo seed ===");
     println!("Demo users:");
     for (i, id) in result.user_ids.iter().enumerate() {
-        let label = if i == 0 { "Ana (ana@demo.walk4change)" } else { "Bek (bek@demo.walk4change)" };
-        println!("  {label}  id={id}");
+        let label = labels.get(i).copied().unwrap_or("user");
+        let token = jwt::encode(&cfg, *id)
+            .unwrap_or_else(|_| "<token error>".into());
+        println!("  {label}");
+        println!("    id    = {id}");
+        println!("    token = {token}");
     }
     println!("Demo password: {}", result.password);
     println!("Active nature zones : {}", result.zone_count);
