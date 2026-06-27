@@ -1,6 +1,6 @@
 // SeaSteps — prosty service worker (instalowalność PWA + offline fallback)
-const CACHE = 'seasteps-v1'
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/pwa-192.png', '/pwa-512.png']
+const CACHE = 'seasteps-v2'
+const SHELL = ['/app/', '/app/index.html', '/app/manifest.webmanifest', '/app/favicon.svg', '/app/pwa-192.png', '/app/pwa-512.png']
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}))
@@ -19,7 +19,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return
   // nawigacje: sieć, a offline -> cache (SPA)
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).catch(() => caches.match('/index.html').then((r) => r || caches.match('/'))))
+    e.respondWith(fetch(req).catch(() => caches.match('/app/index.html').then((r) => r || caches.match('/app/'))))
     return
   }
   // reszta: cache-first z dociąganiem

@@ -17,7 +17,7 @@ export function MagicVerify() {
       try {
         if (await exchangeSupabaseSession()) {
           done = true
-          window.history.replaceState(null, '', '/walk')
+          window.history.replaceState(null, '', `${import.meta.env.BASE_URL}walk`)
           nav('/walk')
           return
         }

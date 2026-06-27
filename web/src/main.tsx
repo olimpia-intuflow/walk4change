@@ -8,7 +8,7 @@ import { ModeProvider } from './lib/mode'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
       <IconContext.Provider value={{ weight: 'fill' }}>
         <ModeProvider>
           <App />
@@ -21,6 +21,6 @@ createRoot(document.getElementById('root')!).render(
 // PWA — rejestracja service workera (instalowalność + offline)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {})
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {})
   })
 }

@@ -237,8 +237,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    var APP_URL = "https://web-alpha-three-89.vercel.app/";
-    var LOGIN_URL = APP_URL.replace(/\/$/, "") + "/login";
+    /* Landing + app share one deploy: app lives under /app/ (same origin). */
+    var APP_URL = "/app/";
+    var LOGIN_URL = "/app/login";
     var SUPABASE_URL = "https://vjsjxdqnmhyrglsfqvvp.supabase.co";
     var SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqc2p4ZHFubWh5cmdsc2ZxdnZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1MDAxODIsImV4cCI6MjA5ODA3NjE4Mn0.LtUG8kIIeNPrqN9wKw-mhra0EmQMyo21FFRQ0F8wDz4";
     var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -259,7 +260,7 @@
         var email = (input.value || "").trim();
         if (email.indexOf("@") < 0) { input.focus(); return; }
         btn.textContent = "Wysyłam…";
-        sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: APP_URL + "auth/magic" } })
+        sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.origin + "/app/auth/magic" } })
           .then(function (res) {
             if (res.error) throw res.error;
             form.innerHTML = '<p style="margin:0;font-weight:700;color:var(--deep)">✓ Sprawdź skrzynkę — magiczny link poszedł na ' + email + '.</p>';

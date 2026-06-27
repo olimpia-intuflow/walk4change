@@ -97,7 +97,7 @@ export async function logout(): Promise<void> {
 /** Send a Supabase magic-link email. Link returns to /auth/magic. */
 export async function requestMagicLink(email: string): Promise<void> {
   const { supabase } = await import('./supabase')
-  const redirectTo = `${window.location.origin}/auth/magic`
+  const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}auth/magic`
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim(),
     options: { emailRedirectTo: redirectTo },
