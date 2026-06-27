@@ -44,7 +44,7 @@ export function Profile() {
           <div className="pointer-events-none absolute -right-2 top-2 opacity-30">
             <FootstepTrail count={5} color="#0f8b8d" />
           </div>
-          <button onClick={() => nav('/app')} className="absolute right-4 top-4 text-muted" aria-label="Ustawienia">
+          <button onClick={() => nav('/')} className="absolute right-4 top-4 text-muted" aria-label="Ustawienia">
             <GearSix size={20} />
           </button>
           <motion.div

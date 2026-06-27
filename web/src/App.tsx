@@ -1,6 +1,5 @@
 import { Routes, Route, Outlet, Navigate } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
-import { Landing } from './screens/Landing'
 import { Login } from './screens/Login'
 import { Home } from './screens/Home'
 import { Walk } from './screens/Walk'
@@ -25,15 +24,9 @@ function ProtectedLayout() {
 function App() {
   return (
     <Routes>
-      {/* publiczne */}
-      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
-
-      {/* aplikacja (chroniona) */}
-      <Route path="/app" element={<ProtectedLayout />}>
-        <Route index element={<Home />} />
-      </Route>
       <Route element={<ProtectedLayout />}>
+        <Route path="/" element={<Home />} />
         <Route path="/walk" element={<Walk />} />
         <Route path="/community" element={<Community />} />
         <Route path="/events" element={<Events />} />
@@ -41,9 +34,8 @@ function App() {
         <Route path="/history" element={<History />} />
         <Route path="/partners" element={<Partners />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="*" element={<Home />} />
       </Route>
-
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
