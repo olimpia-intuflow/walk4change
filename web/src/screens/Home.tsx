@@ -76,7 +76,7 @@ export function Home() {
       <motion.div {...fade(1)} className="mt-5">
         {isTeam ? (
           <>
-            <p className="font-display text-[26px] font-semibold leading-tight text-ink">Cześć, {team?.teamName} 🏢</p>
+            <p className="font-display text-[26px] font-semibold leading-tight text-ink">Cześć, {team?.teamName}</p>
             <p className="text-base text-muted">
               {team?.company} • {team?.members} osób w zespole
             </p>
@@ -178,9 +178,12 @@ export function Home() {
       {/* B2B strip (team only) */}
       {isTeam && (
         <motion.div {...fade(4)} className="mt-4">
-          <Card className="bg-gradient-to-br from-sea/10 to-leaf/10 p-4">
+          <Card className="flex items-center gap-3 bg-gradient-to-br from-sea/10 to-leaf/10 p-4">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/70 text-sea">
+              <Buildings size={18} />
+            </span>
             <p className="text-sm font-semibold leading-snug text-deep">
-              💼 Wellbeing + integracja + eko dla Twojego zespołu — jeden produkt, mierzalny efekt.
+              Wellbeing + integracja + eko dla Twojego zespołu — jeden produkt, mierzalny efekt.
             </p>
           </Card>
         </motion.div>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { motion } from 'motion/react'
-import { Camera, MapPin, PaperPlaneTilt, CheckCircle, Warning, Sparkle } from '@phosphor-icons/react'
+import { Camera, MapPin, PaperPlaneTilt, CheckCircle, Warning, Sparkle, Leaf } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton } from '../components/ui'
 import { api, type EcoReport, type Reward } from '../lib/api'
 
@@ -32,7 +32,7 @@ export function Eco() {
 
   return (
     <div>
-      <ScreenHeader title="Eko" emoji="🌊" subtitle="Coś da się posprzątać — pochwal się. Większy problem — zgłoś." />
+      <ScreenHeader title="Eko" icon={<Leaf size={22} />} subtitle="Coś da się posprzątać — pochwal się. Większy problem — zgłoś." />
 
       <div className="space-y-4 px-5 pt-2">
         {/* segmented tabs */}

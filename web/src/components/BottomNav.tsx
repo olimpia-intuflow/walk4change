@@ -26,7 +26,7 @@ export function BottomNav() {
                   isActive ? 'bg-gradient-to-br from-sea to-leaf text-white shadow-[0_8px_18px_rgba(15,139,141,0.35)]' : 'text-sea/55 group-active:bg-sea/10'
                 }`}
               >
-                <Icon size={22} weight={isActive ? 'fill' : 'bold'} />
+                <Icon size={22} weight="fill" />
               </span>
               <span className={`text-[11px] font-bold ${isActive ? 'text-deep' : 'text-muted'}`}>{label}</span>
             </>

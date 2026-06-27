@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { MapPin, CalendarDots, UsersThree } from '@phosphor-icons/react'
+import { MapPin, CalendarDots, UsersThree, CalendarHeart } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton } from '../components/ui'
 import { useMode } from '../lib/mode'
 import { api, type EventItem, type EventType } from '../lib/api'
@@ -26,7 +26,7 @@ export function Events() {
     <div>
       <ScreenHeader
         title={isTeam ? 'Eventy firmowe' : 'Eventy'}
-        emoji="🌍"
+        icon={<CalendarHeart size={22} />}
         subtitle={isTeam ? 'Integracja, CSR i akcje eko dla zespołów.' : 'Akcje społeczne i eko dla Trójmiasta i Bałtyku.'}
       />
 

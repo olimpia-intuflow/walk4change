@@ -59,12 +59,12 @@ export function ProgressBar({ value, label }: { value: number; label?: string })
 export function ScreenHeader({
   title,
   subtitle,
-  emoji,
+  icon,
   showBack = true,
 }: {
   title: string
   subtitle?: string
-  emoji?: string
+  icon?: ReactNode
   showBack?: boolean
 }) {
   const navigate = useNavigate()
@@ -80,10 +80,12 @@ export function ScreenHeader({
           <CaretLeft size={18} /> Wróć
         </button>
       )}
-      <h1 className="font-display text-[28px] font-bold leading-none text-ink">
-        {emoji && <span className="mr-2">{emoji}</span>}
-        {title}
-      </h1>
+      <div className="flex items-center gap-3">
+        {icon && (
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-sea/12 text-sea">{icon}</span>
+        )}
+        <h1 className="font-display text-[26px] font-bold leading-none text-ink">{title}</h1>
+      </div>
       {subtitle && <p className="mt-1.5 text-sm leading-snug text-muted">{subtitle}</p>}
     </header>
   )

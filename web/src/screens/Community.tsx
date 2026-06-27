@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { MapPin, Clock, Trophy, UsersThree, Footprints, ChatCircle } from '@phosphor-icons/react'
+import { MapPin, Clock, Trophy, UsersThree, Footprints, ChatCircle, Buildings, Heart } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton } from '../components/ui'
 import { useMode } from '../lib/mode'
 import { getInterests } from '../lib/interests'
@@ -28,7 +28,7 @@ export function Community() {
     <div>
       <ScreenHeader
         title={isTeam ? 'Zespół' : 'Społeczność'}
-        emoji={isTeam ? '🏢' : '🤝'}
+        icon={isTeam ? <Buildings size={22} /> : <UsersThree size={22} />}
         subtitle={isTeam ? 'Wspólne spacery działów i ranking zespołów.' : 'Dopasuj się do ludzi, umów się na spacer albo rozmowę.'}
       />
 
@@ -37,7 +37,7 @@ export function Community() {
         {!isTeam && (
           <section>
             <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
-              💚 Dopasowani do Ciebie
+              <Heart size={18} className="text-leaf" /> Dopasowani do Ciebie
             </h2>
             <div className="space-y-3">
               {matches.map((m, i) => {

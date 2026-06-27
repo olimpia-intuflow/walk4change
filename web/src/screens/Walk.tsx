@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { Play, Square, UsersThree, Leaf, Trophy, Camera, Check, ClockCounterClockwise } from '@phosphor-icons/react'
+import { Play, Square, UsersThree, Leaf, Trophy, Camera, Check, ClockCounterClockwise, Footprints } from '@phosphor-icons/react'
 import { ScreenHeader, Card, PrimaryButton, SoftButton, Pill } from '../components/ui'
 import { FootstepTrail } from '../components/Footsteps'
 import { computeWalkPoints } from '../lib/api'
@@ -86,7 +86,7 @@ export function Walk() {
 
   return (
     <div>
-      <ScreenHeader title="Spacer" emoji="👣" subtitle="Każdy krok to punkty. Nad wodą i we dwoje — jeszcze więcej." />
+      <ScreenHeader title="Spacer" icon={<Footprints size={22} />} subtitle="Każdy krok to punkty. Nad wodą i we dwoje — jeszcze więcej." />
 
       <div className="px-5">
         <AnimatePresence mode="wait">

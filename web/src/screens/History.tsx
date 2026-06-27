@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { Clock, Footprints, MapPin, Leaf, UsersThree, Plus } from '@phosphor-icons/react'
+import { Clock, Footprints, MapPin, Leaf, UsersThree, Plus, MapTrifold } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton } from '../components/ui'
 import { RouteMap } from '../components/RouteMap'
 import { getWalks, type SavedWalk } from '../lib/walks'
@@ -31,7 +31,7 @@ export function History() {
 
   return (
     <div>
-      <ScreenHeader title="Moje spacery" emoji="🗺️" subtitle="Twoje trasy, punkty i zdjęcia z drogi." />
+      <ScreenHeader title="Moje spacery" icon={<MapTrifold size={22} />} subtitle="Twoje trasy, punkty i zdjęcia z drogi." />
 
       <div className="space-y-4 px-5 pt-2">
         <PrimaryButton onClick={() => nav('/walk')} className="w-full">
