@@ -4,7 +4,7 @@ use std::sync::Arc;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
 use uuid::Uuid;
-use walk4change_api::{auth::jwt, build_app, config::AppConfig, db, state::AppState};
+use walk4change_api::{auth::jwt, build_app, config::AppConfig, db, state::AppState, ws::hub::Hub};
 
 /// Shared test app handle.
 ///
@@ -80,7 +80,7 @@ pub async fn spawn() -> TestApp {
     let state = AppState {
         pool: pool.clone(),
         config: Arc::clone(&config),
-        hub: (),
+        hub: Hub::new(),
     };
 
     let app = build_app(state);

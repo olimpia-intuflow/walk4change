@@ -15,6 +15,7 @@ pub mod response;
 pub mod routes;
 pub mod scoring;
 pub mod state;
+pub mod ws;
 
 use auth::extractor::AuthUser;
 use state::AppState;

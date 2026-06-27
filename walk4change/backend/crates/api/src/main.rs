@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use walk4change_api::{build_app, config::AppConfig, db, state::AppState};
+use walk4change_api::{build_app, config::AppConfig, db, state::AppState, ws::hub::Hub};
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +23,7 @@ async fn main() {
     let state = AppState {
         pool,
         config: Arc::new(config),
-        hub: (),
+        hub: Hub::new(),
     };
 
     let app = build_app(state);
