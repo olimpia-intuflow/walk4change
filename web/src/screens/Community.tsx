@@ -5,6 +5,7 @@ import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton } from '../componen
 import { Avatar } from '../components/Avatar'
 import { useMode } from '../lib/mode'
 import { getInterests } from '../lib/interests'
+import { getGender } from '../lib/settings'
 import { api, type CommunityWalk, type LeaderboardRow, type TeamRow, type MatchPerson } from '../lib/api'
 
 export function Community() {
@@ -17,6 +18,7 @@ export function Community() {
   const [joined, setJoined] = useState<Record<string, boolean>>({})
   const [invited, setInvited] = useState<Record<string, 'walk' | 'chat' | undefined>>({})
   const myInterests = getInterests()
+  const gender = getGender()
 
   useEffect(() => {
     api.getCommunityWalks().then(setWalks)
@@ -82,7 +84,7 @@ export function Community() {
                           onClick={() => setInvited((v) => ({ ...v, [m.id]: inv === 'walk' ? undefined : 'walk' }))}
                           className="py-2.5 text-sm"
                         >
-                          <Footprints size={16} /> {inv === 'walk' ? '✓ Zaproszona' : 'Umów spacer'}
+                          <Footprints size={16} /> {inv === 'walk' ? `✓ Zaproszon${gender === 'm' ? 'y' : 'a'}` : 'Umów spacer'}
                         </PrimaryButton>
                       </div>
                     </Card>

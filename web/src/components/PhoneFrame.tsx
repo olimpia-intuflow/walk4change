@@ -50,7 +50,7 @@ export function PhoneFrame({ children }: { children: ReactNode }) {
         <div className="pointer-events-none absolute -top-24 right-[-20%] h-72 w-72 rounded-full bg-sea/20 blur-3xl" />
         <div className="pointer-events-none absolute -top-10 left-[-15%] h-56 w-56 rounded-full bg-leaf/20 blur-3xl" />
 
-        <main className="no-scrollbar relative z-10 flex-1 overflow-y-auto pb-28">{children}</main>
+        <main className="no-scrollbar relative z-10 flex-1 overflow-y-auto overflow-x-hidden pb-28">{children}</main>
 
         <BottomNav />
       </div>

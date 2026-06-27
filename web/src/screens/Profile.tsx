@@ -7,12 +7,19 @@ import { Glyph } from '../components/Glyph'
 import { FootstepTrail } from '../components/Footsteps'
 import { api, INTEREST_OPTIONS, type Profile as ProfileT } from '../lib/api'
 import { getInterests, saveInterests } from '../lib/interests'
+import { getGender, saveGender, type Gender } from '../lib/settings'
 
 export function Profile() {
   const nav = useNavigate()
   const [p, setP] = useState<ProfileT | null>(null)
   const [interests, setInterests] = useState<string[]>(getInterests())
   const [editing, setEditing] = useState(false)
+  const [gender, setGender] = useState<Gender>(getGender())
+
+  const pickGender = (g: Gender) => {
+    setGender(g)
+    saveGender(g)
+  }
 
   useEffect(() => {
     api.getProfile().then(setP)
@@ -48,6 +55,21 @@ export function Profile() {
             {p.name.charAt(0)}
           </motion.div>
           <h2 className="mt-3 font-display text-2xl font-bold text-ink">{p.name}</h2>
+
+          <div className="mt-2 inline-flex rounded-full bg-white/70 p-1 text-xs font-bold ring-1 ring-white/60">
+            <button
+              onClick={() => pickGender('f')}
+              className={`rounded-full px-3 py-1 transition ${gender === 'f' ? 'bg-gradient-to-br from-sea to-deep text-white shadow' : 'text-muted'}`}
+            >
+              Ona
+            </button>
+            <button
+              onClick={() => pickGender('m')}
+              className={`rounded-full px-3 py-1 transition ${gender === 'm' ? 'bg-gradient-to-br from-sea to-deep text-white shadow' : 'text-muted'}`}
+            >
+              On
+            </button>
+          </div>
 
           {/* interests */}
           <div className="mt-4 flex items-center justify-center gap-2">

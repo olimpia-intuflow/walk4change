@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { Play, Square, UsersThree, Leaf, Trophy, Camera, Check, ClockCounterClockwise, Footprints, PersonSimpleWalk, HandHeart, PawPrint, Lightbulb } from '@phosphor-icons/react'
+import { Play, Square, UsersThree, Leaf, Trophy, Camera, Check, ClockCounterClockwise, Footprints, HandHeart, PawPrint, Lightbulb } from '@phosphor-icons/react'
 import { ScreenHeader, Card, PrimaryButton, SoftButton, Pill } from '../components/ui'
 import { FootstepTrail } from '../components/Footsteps'
 import { Celebrate } from '../components/Celebrate'
 import { computeWalkPoints } from '../lib/api'
 import { addWalk } from '../lib/walks'
+import { getGender } from '../lib/settings'
 
 const PLACES = ['Bulwar Nadmorski', 'Plaża Brzeźno', 'Park Oliwski', 'Molo w Orłowie', 'Plaża Stogi']
 
@@ -29,6 +30,7 @@ function fmt(sec: number) {
 
 export function Walk() {
   const nav = useNavigate()
+  const gender = getGender()
   const [phase, setPhase] = useState<Phase>('idle')
   const [sec, setSec] = useState(0)
   const [steps, setSteps] = useState(0)
@@ -119,9 +121,9 @@ export function Walk() {
                 </div>
                 <div className="relative">
                   <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-sea/15 to-leaf/15 text-sea">
-                    <PersonSimpleWalk size={40} weight="fill" />
+                    <Footprints size={40} weight="fill" />
                   </div>
-                  <h2 className="font-display text-2xl font-bold text-ink">Gotowa na spacer?</h2>
+                  <h2 className="font-display text-2xl font-bold text-ink">Gotow{gender === 'm' ? 'y' : 'a'} na spacer?</h2>
                   <p className="mx-auto mt-2 max-w-[260px] text-sm text-muted">
                     Włącz spacer, a SeaSteps policzy kroki, czas i punkty na żywo.
                   </p>

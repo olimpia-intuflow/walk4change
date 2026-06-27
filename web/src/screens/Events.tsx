@@ -3,6 +3,7 @@ import { motion } from 'motion/react'
 import { MapPin, CalendarDots, UsersThree, CalendarHeart } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton } from '../components/ui'
 import { useMode } from '../lib/mode'
+import { getGender } from '../lib/settings'
 import { api, type EventItem, type EventType } from '../lib/api'
 
 const typeMeta: Record<EventType, { emoji: string; label: string; tone: 'sea' | 'leaf' | 'sand' }> = {
@@ -15,6 +16,7 @@ const typeMeta: Record<EventType, { emoji: string; label: string; tone: 'sea' | 
 export function Events() {
   const { mode } = useMode()
   const isTeam = mode === 'team'
+  const gender = getGender()
   const [events, setEvents] = useState<EventItem[]>([])
   const [joined, setJoined] = useState<Record<string, boolean>>({})
 
@@ -61,7 +63,7 @@ export function Events() {
                 </div>
                 <div className="p-4 pt-3">
                   <PrimaryButton onClick={() => setJoined((j) => ({ ...j, [e.id]: !j[e.id] }))} className="w-full py-2.5 text-sm">
-                    {joined[e.id] ? '✓ Zapisana — do zobaczenia!' : 'Dołączam'}
+                    {joined[e.id] ? `✓ Zapisan${gender === 'm' ? 'y' : 'a'} — do zobaczenia!` : 'Dołączam'}
                   </PrimaryButton>
                 </div>
               </Card>
