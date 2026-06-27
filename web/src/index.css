@@ -1,0 +1,132 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Baltic coastal palette */
+  --color-bg: #eef7f8;
+  --color-bg-2: #f8fcfd;
+  --color-ink: #14343a;
+  --color-muted: #5d7c81;
+  --color-sea: #0f8b8d;
+  --color-deep: #0c5a71;
+  --color-leaf: #58b86c;
+  --color-sand: #f4c973;
+  --color-foam: #ffffff;
+
+  /* Typography */
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+  --font-body: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+
+  /* Radii */
+  --radius-card: 26px;
+  --radius-pill: 999px;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-body);
+    color: var(--color-ink);
+    background:
+      radial-gradient(circle at 12% -4%, rgba(88, 184, 108, 0.16), transparent 26%),
+      radial-gradient(circle at 100% 0%, rgba(15, 139, 141, 0.22), transparent 30%),
+      linear-gradient(180deg, #f8fcfd 0%, #e7f4f5 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+    margin: 0;
+  }
+
+  button {
+    font-family: inherit;
+  }
+}
+
+/* ── Footstep animations ───────────────────────────────── */
+@keyframes step-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.6) rotate(var(--rot, 0deg));
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) scale(1.06) rotate(var(--rot, 0deg));
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(var(--rot, 0deg));
+  }
+}
+
+/* gentle floating motion for ambient marks */
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* shimmering sea line */
+@keyframes shimmer {
+  0% {
+    background-position: -160% 0;
+  }
+  100% {
+    background-position: 160% 0;
+  }
+}
+
+/* progress ring fill helper */
+@keyframes ring-fill {
+  from {
+    stroke-dashoffset: var(--from, 360);
+  }
+}
+
+/* slow ambient wave */
+@keyframes sway {
+  0%,
+  100% {
+    transform: translateX(-2%);
+  }
+  50% {
+    transform: translateX(2%);
+  }
+}
+
+.animate-drift {
+  animation: drift 5s ease-in-out infinite;
+}
+
+/* hide scrollbars inside the phone shell while keeping scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* glass card surface */
+.glass {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}

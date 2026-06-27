@@ -1,0 +1,18 @@
+{
+  "name": "SeaSteps",
+  "short_name": "SeaSteps",
+  "description": "Spacer, który robi dobrze Tobie i naturze. Ruch, natura, ludzie i małe działania dla Bałtyku.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef7f8",
+  "theme_color": "#0f8b8d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
