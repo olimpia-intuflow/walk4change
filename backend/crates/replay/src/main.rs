@@ -174,6 +174,11 @@ async fn join_walk(client: &reqwest::Client, base: &str, token: &str, session_id
         .await
         .context("join walk request failed")?;
 
+    // 409 = already a participant (e.g. re-running against an existing --session).
+    if resp.status() == reqwest::StatusCode::CONFLICT {
+        return Ok(());
+    }
+
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
@@ -308,20 +313,22 @@ async fn main() -> Result<()> {
     };
 
     // ── Session setup ─────────────────────────────────────────────────────────
+    // Either reuse an existing session (e.g. one started by the app/browser via
+    // --session) or start a fresh one. In BOTH cases the friend joins, so the
+    // browser can start a walk and have replay populate it with two walkers.
     let session_id = if let Some(id) = cfg.session {
         println!("Using existing session {id}");
         id
     } else {
         let (id, join_code) = start_walk(&client, &cfg.base, &token_a).await?;
         println!("Started walk — session_id={id}  join_code={}", join_code.as_deref().unwrap_or("-"));
-
-        if let (Some(ref tb), Some(ref f)) = (&token_b, &cfg.friend) {
-            println!("Friend {} joining ...", f.email);
-            join_walk(&client, &cfg.base, tb, id).await?;
-        }
-
         id
     };
+
+    if let (Some(ref tb), Some(ref f)) = (&token_b, &cfg.friend) {
+        println!("Friend {} joining session {session_id} ...", f.email);
+        join_walk(&client, &cfg.base, tb, session_id).await?;
+    }
 
     // ── Stream ────────────────────────────────────────────────────────────────
     let base_a = cfg.base.clone();
