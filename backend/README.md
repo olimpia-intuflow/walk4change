@@ -4,6 +4,28 @@ A standalone Rust service (Axum + Tokio + sqlx) that powers the walk4change plat
 
 For the full design specification, see `docs/superpowers/specs/2026-06-27-walk4change-backend-design.md`.
 
+## Quick Start — Local (Docker only, no host Rust)
+
+Runs Postgres + the API in containers against a **local** database. Supabase is
+prod-only; nothing here touches it.
+
+```bash
+cd backend
+
+# With the docker compose plugin installed:
+docker compose up --build        # DB + API → http://localhost:8080/api/v1
+
+# Without the compose plugin (plain docker):
+./scripts/dev-up.sh              # builds image, starts DB + API, waits for health
+./scripts/seed.sh                # optional: demo users Ana & Bek (password: demodemo)
+./scripts/dev-down.sh            # stop (add --purge to wipe the DB volume)
+```
+
+Health check: `curl http://localhost:8080/api/v1/health` → `ok`.
+
+To point at Supabase instead (prod), set `DATABASE_URL` to the Supabase
+connection string and leave everything else the same.
+
 ## Prerequisites
 
 - **Rust**: Latest stable toolchain
