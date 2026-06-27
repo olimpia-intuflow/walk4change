@@ -343,3 +343,81 @@ async fn left_participant_subscribe_yields_error() {
     // Suppress unused-variable warnings for host_id (only friend_id matters here).
     let _ = host_id;
 }
+
+/// Like `next_json` but with a 1-second timeout, for negative assertions.
+async fn next_json_short(ws: &mut Ws) -> Option<Value> {
+    loop {
+        match tokio::time::timeout(Duration::from_secs(1), ws.next()).await {
+            Err(_) => return None,
+            Ok(None) => return None,
+            Ok(Some(Ok(Message::Text(t)))) => {
+                return Some(serde_json::from_str(&t).expect("frame must be JSON"))
+            }
+            Ok(Some(Ok(Message::Close(_)))) => return None,
+            Ok(Some(Err(_))) => return None,
+            Ok(Some(Ok(_))) => continue,
+        }
+    }
+}
+
+/// Spec §271: live subscription is revoked when the subscriber leaves mid-session.
+///
+/// Flow: friend subscribes → host pings seq=1 → assert friend receives it (stream
+/// is live) → friend leaves (204) → short DB-propagation delay → host pings
+/// seq=2 → assert friend receives NO frame within 1 s.
+///
+/// Using distinct seq numbers prevents dedup (score_ping silently drops seq=1
+/// if it was already stored), which would cause a spurious pass.
+#[tokio::test]
+async fn leave_revokes_subscription_no_frames_after_leave() {
+    let app = common::spawn().await;
+    let (_, host_token) = register_user(&app, "ws_rev_host@example.com").await;
+    let (friend_id, friend_token) = register_user(&app, "ws_rev_friend@example.com").await;
+
+    make_friends(&app, &host_token, friend_id, &friend_token).await;
+    let session_id = start_walk(&app, &host_token).await;
+    join_walk(&app, session_id, &friend_token).await;
+
+    // Friend subscribes to the live session stream.
+    let mut subscriber = connect_ws(&app).await;
+    send_json(&mut subscriber, json!({ "type": "auth", "token": friend_token })).await;
+    send_json(&mut subscriber, json!({ "type": "subscribe", "session_id": session_id })).await;
+
+    // Allow subscription to register before the first ping.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Host pings seq=1 — subscriber must receive it (proves the stream is live).
+    let mut host_ws = connect_ws(&app).await;
+    send_json(&mut host_ws, json!({ "type": "auth", "token": host_token })).await;
+    send_json(&mut host_ws, ping_frame(session_id, 1, 52.0, 21.0)).await;
+
+    let first_frame = next_json(&mut subscriber)
+        .await
+        .expect("subscriber must receive ping_scored for seq=1");
+    assert_eq!(
+        first_frame["type"], "ping_scored",
+        "expected ping_scored, got: {first_frame:?}"
+    );
+
+    // Friend leaves the session.
+    let resp = app
+        .client
+        .post(format!("{}/api/v1/walks/{session_id}/leave", app.base_url))
+        .header("Authorization", format!("Bearer {friend_token}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 204, "leave must return 204");
+
+    // Allow the DB write (left_at) to propagate before the next ping.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    // Host pings seq=2 — departed subscriber must NOT receive this frame.
+    send_json(&mut host_ws, ping_frame(session_id, 2, 52.001, 21.001)).await;
+
+    let second_frame = next_json_short(&mut subscriber).await;
+    assert!(
+        second_frame.is_none(),
+        "departed subscriber must NOT receive ping_scored after leaving, got: {second_frame:?}"
+    );
+}

@@ -147,7 +147,13 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             Ok(true) => {
                                 if subscriptions.insert(session_id) {
                                     let rx = state.hub.session_sender(session_id).subscribe();
-                                    forwarders.push(spawn_forwarder(rx, out_tx.clone()));
+                                    forwarders.push(spawn_session_forwarder(
+                                        rx,
+                                        out_tx.clone(),
+                                        state.pool.clone(),
+                                        session_id,
+                                        actor,
+                                    ));
                                 }
                             }
                             Ok(false) => {
@@ -311,7 +317,13 @@ async fn handle_ping(
     // its own scored ping through the single broadcast path (no echo, no dupes).
     if subscriptions.insert(session_id) {
         let rx = state.hub.session_sender(session_id).subscribe();
-        forwarders.push(spawn_forwarder(rx, out_tx.clone()));
+        forwarders.push(spawn_session_forwarder(
+            rx,
+            out_tx.clone(),
+            state.pool.clone(),
+            session_id,
+            actor,
+        ));
     }
 
     let ping_frame = ServerFrame::PingScored {
@@ -361,6 +373,45 @@ fn spawn_forwarder(
                 Ok(frame) => {
                     if out_tx.send(frame).is_err() {
                         break; // connection task gone
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    })
+}
+
+/// Spawn a task that forwards session broadcast frames into the connection's `out_tx`,
+/// revoking the subscription when the actor is no longer an active participant.
+///
+/// Spec §271: once `left_at` is set (via /leave), the forwarder stops relaying
+/// live GPS frames to the departed subscriber. The check is per-frame (frames
+/// are low-rate/throttled, so the DB round-trip is acceptable). The leaderboard
+/// forwarder does NOT require this check.
+///
+/// Fails closed: any DB error is treated as "no longer active" to prevent
+/// inadvertent data leakage.
+fn spawn_session_forwarder(
+    mut rx: broadcast::Receiver<ServerFrame>,
+    out_tx: mpsc::UnboundedSender<ServerFrame>,
+    pool: sqlx::PgPool,
+    session_id: Uuid,
+    actor: Uuid,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            match rx.recv().await {
+                Ok(frame) => {
+                    // Revoke subscription when the actor is no longer an active participant.
+                    match walk::is_active_participant(&pool, session_id, actor).await {
+                        Ok(true) => {
+                            if out_tx.send(frame).is_err() {
+                                break; // connection task gone
+                            }
+                        }
+                        // Ok(false) → left the session; Err(_) → fail-closed.
+                        _ => break,
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,

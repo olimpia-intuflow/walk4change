@@ -144,9 +144,16 @@ pub fn build_app(state: AppState) -> Router {
                 match limiter.check(ip) {
                     Ok(()) => next.run(req).await,
                     Err(retry_after) => {
+                        let limit = limiter.max_requests();
+                        let reset_epoch = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs()
+                            .saturating_add(retry_after);
+
                         let mut resp = axum::Json(serde_json::json!({
                             "error": {
-                                "code": "rate_limited",
+                                "code": "RATE_LIMITED",
                                 "message": format!(
                                     "Rate limit exceeded. Retry after {} seconds.",
                                     retry_after
@@ -155,12 +162,31 @@ pub fn build_app(state: AppState) -> Router {
                         }))
                         .into_response();
                         *resp.status_mut() = StatusCode::TOO_MANY_REQUESTS;
-                        resp.headers_mut().insert(
+                        let headers = resp.headers_mut();
+                        headers.insert(
                             header::RETRY_AFTER,
                             retry_after
                                 .to_string()
                                 .parse()
                                 .unwrap_or(HeaderValue::from_static("60")),
+                        );
+                        headers.insert(
+                            "x-ratelimit-limit",
+                            limit
+                                .to_string()
+                                .parse()
+                                .unwrap_or(HeaderValue::from_static("0")),
+                        );
+                        headers.insert(
+                            "x-ratelimit-remaining",
+                            HeaderValue::from_static("0"),
+                        );
+                        headers.insert(
+                            "x-ratelimit-reset",
+                            reset_epoch
+                                .to_string()
+                                .parse()
+                                .unwrap_or(HeaderValue::from_static("0")),
                         );
                         resp
                     }

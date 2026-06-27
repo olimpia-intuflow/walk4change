@@ -37,6 +37,11 @@ impl RateLimiter {
         }
     }
 
+    /// Return the configured request limit for this window.
+    pub fn max_requests(&self) -> u32 {
+        self.max_requests
+    }
+
     /// Check whether `ip` is within quota.
     ///
     /// Returns `Ok(())` if the request may proceed (counter is incremented).

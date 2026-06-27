@@ -64,11 +64,19 @@ async fn auth_rate_limit_returns_429_with_retry_after() {
         resp.headers().contains_key("retry-after"),
         "429 response must include Retry-After header"
     );
+    assert!(
+        resp.headers().contains_key("x-ratelimit-limit"),
+        "429 response must include X-RateLimit-Limit header"
+    );
+    assert!(
+        resp.headers().contains_key("x-ratelimit-reset"),
+        "429 response must include X-RateLimit-Reset header"
+    );
 
     let body: serde_json::Value = resp.json().await.expect("body must be JSON");
     assert_eq!(
-        body["error"]["code"], "rate_limited",
-        "error envelope code must be 'rate_limited', got: {body:?}"
+        body["error"]["code"], "RATE_LIMITED",
+        "error envelope code must be 'RATE_LIMITED', got: {body:?}"
     );
 }
 
