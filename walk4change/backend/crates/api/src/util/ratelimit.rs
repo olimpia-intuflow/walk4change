@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -21,6 +22,8 @@ pub struct RateLimiter {
     buckets: Mutex<HashMap<IpAddr, Window>>,
     max_requests: u32,
     window: Duration,
+    /// Monotonically increasing counter used to schedule periodic pruning.
+    call_count: AtomicU64,
 }
 
 impl RateLimiter {
@@ -30,6 +33,7 @@ impl RateLimiter {
             buckets: Mutex::new(HashMap::new()),
             max_requests,
             window: Duration::from_secs(window_secs),
+            call_count: AtomicU64::new(0),
         }
     }
 
@@ -44,6 +48,15 @@ impl RateLimiter {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
 
         let now = Instant::now();
+
+        // Opportunistically prune every 256 calls to bound map growth.
+        // Pruning before accessing the current entry avoids borrow conflicts;
+        // any stale entry for `ip` will simply be re-created fresh below.
+        let prev = self.call_count.fetch_add(1, Ordering::Relaxed);
+        if prev % 256 == 0 {
+            let window = self.window;
+            buckets.retain(|_, w| now.duration_since(w.start) < window);
+        }
 
         let entry = buckets.entry(ip).or_insert_with(|| Window {
             count: 0,
@@ -101,5 +114,39 @@ mod tests {
         lim.check(ip).unwrap();
         let retry = lim.check(ip).unwrap_err();
         assert!(retry >= 1);
+    }
+
+    #[test]
+    fn prune_removes_stale_entries() {
+        let lim = RateLimiter::new(100, 60);
+        let ip_stale1 = IpAddr::V4(Ipv4Addr::new(1, 1, 1, 1));
+        let ip_stale2 = IpAddr::V4(Ipv4Addr::new(2, 2, 2, 2));
+        let ip_fresh = IpAddr::V4(Ipv4Addr::new(3, 3, 3, 3));
+
+        // Directly insert stale entries whose window has long expired.
+        {
+            let mut buckets = lim.buckets.lock().unwrap();
+            buckets.insert(
+                ip_stale1,
+                Window {
+                    count: 5,
+                    start: Instant::now() - Duration::from_secs(120),
+                },
+            );
+            buckets.insert(
+                ip_stale2,
+                Window {
+                    count: 3,
+                    start: Instant::now() - Duration::from_secs(61),
+                },
+            );
+        }
+
+        // call_count starts at 0, so the very first check() triggers a prune
+        // (prev == 0, and 0 % 256 == 0).
+        lim.check(ip_fresh).unwrap();
+
+        let remaining = lim.buckets.lock().unwrap().len();
+        assert_eq!(remaining, 1, "stale entries should have been pruned; only ip_fresh remains");
     }
 }
