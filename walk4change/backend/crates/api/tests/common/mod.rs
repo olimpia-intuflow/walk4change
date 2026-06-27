@@ -136,3 +136,19 @@ pub async fn spawn_with_rate_limits(
 
     spawn_inner(cfg, db_url).await
 }
+
+/// Spawn a test server with a custom companion-window size for scoring tests.
+///
+/// Setting `ping_window_secs` to a small value (e.g. 2 s) lets tests that check
+/// the together-mult transition (solo→pair→solo) observe it quickly without
+/// waiting the full default 60-second window.  All other config fields use
+/// `AppConfig::test_default()` (high rate limits, standard argon2 params, etc.).
+pub async fn spawn_with_scoring(ping_window_secs: i64) -> TestApp {
+    let db_url = std::env::var("TEST_DATABASE_URL")
+        .expect("TEST_DATABASE_URL must be set for integration tests");
+
+    let mut cfg = AppConfig::test_default();
+    cfg.scoring.ping_window_secs = ping_window_secs;
+
+    spawn_inner(cfg, db_url).await
+}
