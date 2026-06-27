@@ -61,6 +61,15 @@ pub fn build_app(state: AppState) -> Router {
             "/api/v1/leaderboard",
             get(routes::leaderboard::get_leaderboard),
         )
+        .route("/api/v1/rewards", get(routes::rewards::list_rewards))
+        .route(
+            "/api/v1/rewards/:id/redeem",
+            post(routes::rewards::redeem_reward),
+        )
+        .route(
+            "/api/v1/me/redemptions",
+            get(routes::rewards::list_my_redemptions),
+        )
         .route("/api/v1/ws", get(ws::handler::ws_handler))
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))

@@ -60,6 +60,35 @@ pub struct WalkDetail {
     pub participants: Vec<ParticipantInfo>,
 }
 
+/// A reward catalog entry returned from `GET /api/v1/rewards`.
+///
+/// `type_` maps to the SQL column `type` (a Rust keyword), so the SELECT must
+/// alias it as `type AS type_`; it is serialised back to JSON as `type`.
+/// `stock = None` means unlimited stock.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct Reward {
+    pub id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub cost_points: Decimal,
+    pub partner_name: Option<String>,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub stock: Option<i32>,
+    pub image_url: Option<String>,
+}
+
+/// A reward redemption record returned from redeem / list endpoints.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct Redemption {
+    pub id: Uuid,
+    pub reward_id: Uuid,
+    pub code: String,
+    pub points_spent: Decimal,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+}
+
 /// A single location ping point returned from the track endpoint.
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct PingPoint {
