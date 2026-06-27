@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -27,4 +28,45 @@ pub struct FriendsList {
     pub accepted: Vec<Profile>,
     pub incoming_pending: Vec<PendingItem>,
     pub outgoing_pending: Vec<PendingItem>,
+}
+
+/// A walk session row returned from the API.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct WalkSession {
+    pub id: Uuid,
+    pub host_id: Uuid,
+    pub status: String,
+    pub join_code: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+}
+
+/// A single participant in a walk session.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct ParticipantInfo {
+    pub id: Uuid,
+    pub session_id: Uuid,
+    pub user_id: Uuid,
+    pub joined_at: DateTime<Utc>,
+    pub left_at: Option<DateTime<Utc>>,
+    pub total_meters: Decimal,
+    pub total_points: Decimal,
+}
+
+/// Full walk detail: session + participants list.
+#[derive(Debug, Serialize)]
+pub struct WalkDetail {
+    pub session: WalkSession,
+    pub participants: Vec<ParticipantInfo>,
+}
+
+/// A single location ping point returned from the track endpoint.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct PingPoint {
+    pub user_id: Uuid,
+    pub seq: i32,
+    pub lat: f64,
+    pub lng: f64,
+    pub points: Decimal,
+    pub recorded_at: DateTime<Utc>,
 }

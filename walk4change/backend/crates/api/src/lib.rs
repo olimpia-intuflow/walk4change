@@ -3,7 +3,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-
 use tower_http::trace::TraceLayer;
 
 pub mod auth;
@@ -50,6 +49,12 @@ pub fn build_app(state: AppState) -> Router {
         .route("/api/v1/friends/request", post(routes::friends::send_request))
         .route("/api/v1/friends/respond", post(routes::friends::respond))
         .route("/api/v1/friends", get(routes::friends::list))
+        .route("/api/v1/walks", post(routes::walks::start_walk))
+        .route("/api/v1/walks/:id", get(routes::walks::get_walk))
+        .route("/api/v1/walks/:id/join", post(routes::walks::join_walk))
+        .route("/api/v1/walks/:id/leave", post(routes::walks::leave_walk))
+        .route("/api/v1/walks/:id/stop", post(routes::walks::stop_walk))
+        .route("/api/v1/walks/:id/track", get(routes::walks::track_walk))
         .with_state(state)
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .layer(TraceLayer::new_for_http())
