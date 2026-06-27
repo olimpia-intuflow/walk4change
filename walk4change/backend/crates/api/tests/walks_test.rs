@@ -72,8 +72,19 @@ async fn start_walk(app: &common::TestApp, host_token: &str) -> (Uuid, serde_jso
         .await
         .unwrap();
     assert_eq!(resp.status().as_u16(), 201, "start walk must return 201");
+    // Capture the Location header before consuming the response body.
+    let location = resp
+        .headers()
+        .get("location")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
     let body: serde_json::Value = resp.json().await.unwrap();
     let session_id: Uuid = body["data"]["id"].as_str().unwrap().parse().unwrap();
+    assert_eq!(
+        location.unwrap(),
+        format!("/api/v1/walks/{session_id}"),
+        "Location header must point to the new session"
+    );
     (session_id, body)
 }
 
