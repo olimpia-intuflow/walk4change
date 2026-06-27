@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
