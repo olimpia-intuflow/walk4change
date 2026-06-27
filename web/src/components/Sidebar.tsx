@@ -15,7 +15,7 @@ const items = [
 export function Sidebar() {
   const { pathname } = useLocation()
   return (
-    <aside className="sticky top-0 hidden h-[100svh] w-64 shrink-0 flex-col gap-1 border-r border-white/50 px-4 py-6 lg:flex">
+    <aside className="sticky top-0 hidden h-[100svh] w-60 shrink-0 flex-col items-start gap-1 border-r border-white/50 px-4 py-6 lg:flex">
       <div className="px-3 pb-6">
         <Logo />
       </div>
@@ -25,7 +25,7 @@ export function Sidebar() {
           <Link
             key={to}
             to={to}
-            className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition ${
+            className={`flex w-44 items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-bold transition ${
               isActive
                 ? 'bg-gradient-to-br from-sea to-leaf text-white shadow-[0_10px_22px_rgba(15,139,141,0.3)]'
                 : 'text-muted hover:bg-sea/10 hover:text-deep'
