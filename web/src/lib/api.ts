@@ -24,7 +24,7 @@ export interface Profile {
     events: number
     ecoReports: number
   }
-  badges: { id: string; label: string; icon: string }[]
+  badges: { id: string; label: string; iconKey: string }[]
 }
 
 export interface TodayStats {
@@ -63,7 +63,7 @@ export interface Reward {
   id: string
   title: string
   kind: string
-  icon: string
+  iconKey: string
   /** 0–100 */
   progress: number
 }
@@ -107,10 +107,10 @@ const me: Profile = {
   interests: ['Spacery nad morzem', 'Natura', 'Mindfulness', 'Eko'],
   stats: { walks: 23, events: 4, ecoReports: 6 },
   badges: [
-    { id: 'b1', label: 'Pierwszy spacer', icon: '👣' },
-    { id: 'b2', label: '7 dni z rzędu', icon: '🔥' },
-    { id: 'b3', label: 'Strażniczka brzegu', icon: '🌊' },
-    { id: 'b4', label: 'Sadziła drzewo', icon: '🌳' },
+    { id: 'b1', label: 'Pierwszy spacer', iconKey: 'firststep' },
+    { id: 'b2', label: '7 dni z rzędu', iconKey: 'streak' },
+    { id: 'b3', label: 'Strażniczka brzegu', iconKey: 'shore' },
+    { id: 'b4', label: 'Sadziła drzewo', iconKey: 'tree' },
   ],
 }
 
@@ -136,9 +136,9 @@ const events: EventItem[] = [
 ]
 
 const rewards: Reward[] = [
-  { id: 'r1', title: 'Adopcja foki', kind: 'Cel ekologiczny', icon: '🦭', progress: 72 },
-  { id: 'r2', title: 'Posadzenie drzewa', kind: 'Cel ekologiczny', icon: '🌳', progress: 45 },
-  { id: 'r3', title: 'Voucher partnera', kind: 'Nagroda lokalna', icon: '🎟️', progress: 30 },
+  { id: 'r1', title: 'Adopcja foki', kind: 'Cel ekologiczny', iconKey: 'seal', progress: 72 },
+  { id: 'r2', title: 'Posadzenie drzewa', kind: 'Cel ekologiczny', iconKey: 'tree', progress: 45 },
+  { id: 'r3', title: 'Voucher partnera', kind: 'Nagroda lokalna', iconKey: 'voucher', progress: 30 },
 ]
 
 const ecoReports: EcoReport[] = [
@@ -251,9 +251,9 @@ const corporateEvents: EventItem[] = [
 ]
 
 const teamRewards: Reward[] = [
-  { id: 'tr1', title: 'Dzień wolny dla zespołu', kind: 'Nagroda firmowa', icon: '🏖️', progress: 64 },
-  { id: 'tr2', title: 'Budżet na integrację', kind: 'Nagroda firmowa', icon: '🎉', progress: 40 },
-  { id: 'tr3', title: 'Dzień wellbeing', kind: 'Nagroda firmowa', icon: '🧘', progress: 28 },
+  { id: 'tr1', title: 'Dzień wolny dla zespołu', kind: 'Nagroda firmowa', iconKey: 'dayoff', progress: 64 },
+  { id: 'tr2', title: 'Budżet na integrację', kind: 'Nagroda firmowa', iconKey: 'integration', progress: 40 },
+  { id: 'tr3', title: 'Dzień wellbeing', kind: 'Nagroda firmowa', iconKey: 'wellbeing', progress: 28 },
 ]
 
 // symulacja opóźnienia sieci, żeby UI był „prawdziwy"

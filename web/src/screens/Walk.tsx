@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
-import { Play, Square, UsersThree, Leaf, Trophy, Camera, Check, ClockCounterClockwise, Footprints } from '@phosphor-icons/react'
+import { Play, Square, UsersThree, Leaf, Trophy, Camera, Check, ClockCounterClockwise, Footprints, PersonSimpleWalk, HandHeart } from '@phosphor-icons/react'
 import { ScreenHeader, Card, PrimaryButton, SoftButton, Pill } from '../components/ui'
 import { FootstepTrail } from '../components/Footsteps'
 import { computeWalkPoints } from '../lib/api'
@@ -104,8 +104,8 @@ export function Walk() {
                   <FootstepTrail count={6} color="#0f8b8d" />
                 </div>
                 <div className="relative">
-                  <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-sea/15 to-leaf/15 text-4xl">
-                    🚶‍♀️
+                  <div className="mx-auto mb-4 grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-sea/15 to-leaf/15 text-sea">
+                    <PersonSimpleWalk size={40} weight="fill" />
                   </div>
                   <h2 className="font-display text-2xl font-bold text-ink">Gotowa na spacer?</h2>
                   <p className="mx-auto mt-2 max-w-[260px] text-sm text-muted">
@@ -194,7 +194,9 @@ export function Walk() {
                   )}
                 </div>
 
-                <p className="mt-4 text-sm font-bold text-[#2f7a45]">🦭 Jesteś coraz bliżej adopcji foki!</p>
+                <p className="mt-4 inline-flex items-center justify-center gap-1.5 text-sm font-bold text-[#2f7a45]">
+                  <HandHeart size={16} weight="fill" /> Jesteś coraz bliżej adopcji foki!
+                </p>
               </Card>
 
               {/* zdjęcia z trasy */}

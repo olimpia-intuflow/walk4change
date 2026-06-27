@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { Camera, MapPin, PaperPlaneTilt, CheckCircle, Warning, Sparkle, Leaf } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton } from '../components/ui'
+import { Glyph } from '../components/Glyph'
 import { api, type EcoReport, type Reward } from '../lib/api'
 
 const statusMeta: Record<EcoReport['status'], { label: string; tone: 'leaf' | 'sand' | 'sea' }> = {
@@ -106,7 +107,7 @@ export function Eco() {
             </div>
           ) : (
             <div className="space-y-3">
-              <h2 className="font-display text-lg font-bold text-ink">Pochwal się — posprzątane! 🌟</h2>
+              <h2 className="font-display text-lg font-bold text-ink">Pochwal się — posprzątane!</h2>
               <p className="-mt-1 text-sm text-muted">Coś ogarnęłaś sama? Pokaż efekt i zgarnij punkty.</p>
               <div className="flex flex-wrap gap-2">
                 {['Plaża', 'Park', 'Las', 'Ulica', 'Brzeg'].map((t) => (
@@ -139,8 +140,8 @@ export function Eco() {
           <div className="space-y-2.5">
             {reports.map((r) => (
               <Card key={r.id} className="flex items-center gap-3 p-3.5">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-sea/10 text-lg">
-                  {r.status === 'cleaned' ? '🌟' : '🌊'}
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-sea/10 text-sea">
+                  {r.status === 'cleaned' ? <Sparkle size={18} /> : <Leaf size={18} />}
                 </div>
                 <div className="flex-1">
                   <div className="text-sm font-bold text-ink">{r.type}</div>
@@ -158,7 +159,9 @@ export function Eco() {
           <div className="grid grid-cols-3 gap-2.5">
             {rewards.map((rw) => (
               <Card key={rw.id} className="p-3 text-center">
-                <div className="text-3xl">{rw.icon}</div>
+                <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-sand/20 text-[#c8761b]">
+                  <Glyph k={rw.iconKey} size={22} />
+                </div>
                 <div className="mt-1.5 text-xs font-bold leading-tight text-ink">{rw.title}</div>
                 <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-sea/10">
                   <div className="h-full rounded-full bg-gradient-to-r from-sea to-leaf" style={{ width: `${rw.progress}%` }} />

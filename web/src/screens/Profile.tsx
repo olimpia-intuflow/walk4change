@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Footprints, CalendarHeart, Recycle, GearSix, PencilSimple, Check } from '@phosphor-icons/react'
 import { Card, Pill } from '../components/ui'
+import { Glyph } from '../components/Glyph'
 import { FootstepTrail } from '../components/Footsteps'
 import { api, INTEREST_OPTIONS, type Profile as ProfileT } from '../lib/api'
 import { getInterests, saveInterests } from '../lib/interests'
@@ -42,9 +43,9 @@ export function Profile() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring' }}
-            className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-sea to-leaf text-5xl shadow-[0_16px_30px_rgba(15,139,141,0.3)]"
+            className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br from-sea to-leaf font-display text-4xl font-bold text-white shadow-[0_16px_30px_rgba(15,139,141,0.3)]"
           >
-            {p.avatar}
+            {p.name.charAt(0)}
           </motion.div>
           <h2 className="mt-3 font-display text-2xl font-bold text-ink">{p.name}</h2>
 
@@ -115,7 +116,9 @@ export function Profile() {
           {p.badges.map((b, i) => (
             <motion.div key={b.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
               <Card className="flex items-center gap-3 p-3.5">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sand/20 text-2xl">{b.icon}</div>
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sand/20 text-[#c8761b]">
+                  <Glyph k={b.iconKey} size={22} />
+                </div>
                 <span className="text-sm font-bold leading-tight text-ink">{b.label}</span>
               </Card>
             </motion.div>

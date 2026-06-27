@@ -7,6 +7,8 @@ import { ModeToggle } from '../components/ModeToggle'
 import { FootstepTrail } from '../components/Footsteps'
 import { Card, Pill, ProgressBar } from '../components/ui'
 import { SponsorIcon } from '../components/SponsorIcon'
+import { Glyph } from '../components/Glyph'
+import { Avatar } from '../components/Avatar'
 import { useMode } from '../lib/mode'
 import { api, type TodayStats, type Reward, type TeamToday, type Sponsor } from '../lib/api'
 
@@ -72,7 +74,10 @@ export function Home() {
     <div className="px-5 pt-5">
       <motion.div {...fade(0)} className="flex items-center justify-between">
         <Logo />
-        <ModeToggle />
+        <div className="flex items-center gap-2">
+          <ModeToggle />
+          <Avatar name="Ola" size={40} />
+        </div>
       </motion.div>
 
       {/* greeting */}
@@ -163,7 +168,9 @@ export function Home() {
           <motion.div {...fade(3)} className="mt-4">
             <Card className="p-5">
               <div className="mb-3 flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sand/25 text-2xl">{reward.icon}</div>
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sand/25 text-[#c8761b]">
+                  <Glyph k={reward.iconKey} size={22} />
+                </div>
                 <div className="flex-1">
                   <div className="font-display text-lg font-bold text-ink">{reward.title}</div>
                   <div className="text-xs font-bold text-muted">{reward.kind}</div>

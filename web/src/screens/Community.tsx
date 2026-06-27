@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { MapPin, Clock, Trophy, UsersThree, Footprints, ChatCircle, Buildings, Heart } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton } from '../components/ui'
+import { Avatar } from '../components/Avatar'
 import { useMode } from '../lib/mode'
 import { getInterests } from '../lib/interests'
 import { api, type CommunityWalk, type LeaderboardRow, type TeamRow, type MatchPerson } from '../lib/api'
@@ -47,9 +48,7 @@ export function Community() {
                   <motion.div key={m.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
                     <Card className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-sea/12 to-leaf/12 text-2xl">
-                          {m.avatar}
-                        </div>
+                        <Avatar name={m.name} size={48} />
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             <span className="font-display text-lg font-bold text-ink">{m.name}</span>
@@ -102,7 +101,7 @@ export function Community() {
               <motion.div key={w.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
                 <Card className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sea/10 text-2xl">{w.avatar}</div>
+                    <Avatar name={w.who} size={48} />
                     <div className="flex-1">
                       <div className="font-display text-lg font-bold text-ink">{w.who}</div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-bold text-muted">
@@ -157,7 +156,7 @@ export function Community() {
                     <span className={`w-6 text-center font-display text-lg font-bold ${r.rank <= 3 ? 'text-sea' : 'text-muted'}`}>
                       {r.rank}
                     </span>
-                    <span className="grid h-9 w-9 place-items-center rounded-full bg-white/70 text-lg">{r.avatar}</span>
+                    <Avatar name={r.name} size={36} />
                     <span className={`flex-1 text-sm font-bold ${r.isMe ? 'text-deep' : 'text-ink'}`}>
                       {r.name} {r.isMe && <Pill tone="sea">to Ty</Pill>}
                     </span>
