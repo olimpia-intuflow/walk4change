@@ -20,6 +20,7 @@ pub mod repo;
 pub mod response;
 pub mod routes;
 pub mod scoring;
+pub mod seed;
 pub mod state;
 pub mod util;
 pub mod ws;
