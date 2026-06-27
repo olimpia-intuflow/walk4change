@@ -1,0 +1,236 @@
+mod common;
+
+use std::time::Duration;
+
+use futures_util::{SinkExt, StreamExt};
+use serde_json::{json, Value};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::Message,
+    MaybeTlsStream, WebSocketStream,
+};
+use uuid::Uuid;
+
+type Ws = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
+
+// ── HTTP helpers (mirror walks_test.rs) ───────────────────────────────────────
+
+/// Register a user and return (user_id, token).
+async fn register_user(app: &common::TestApp, email: &str) -> (Uuid, String) {
+    let resp = app
+        .client
+        .post(format!("{}/api/v1/auth/register", app.base_url))
+        .json(&json!({
+            "email": email,
+            "password": "password123",
+            "display_name": "TestUser"
+        }))
+        .send()
+        .await
+        .expect("register failed");
+    assert_eq!(resp.status().as_u16(), 201, "register must return 201");
+    let body: Value = resp.json().await.unwrap();
+    let id: Uuid = body["data"]["id"].as_str().unwrap().parse().unwrap();
+    let token = body["token"].as_str().unwrap().to_owned();
+    (id, token)
+}
+
+/// Establish a friendship: `a` sends request to `b_id`, `b` accepts.
+async fn make_friends(app: &common::TestApp, a_token: &str, b_id: Uuid, b_token: &str) {
+    let resp = app
+        .client
+        .post(format!("{}/api/v1/friends/request", app.base_url))
+        .header("Authorization", format!("Bearer {a_token}"))
+        .json(&json!({ "addressee_id": b_id }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 201);
+
+    let resp = app
+        .client
+        .get(format!("{}/api/v1/friends", app.base_url))
+        .header("Authorization", format!("Bearer {b_token}"))
+        .send()
+        .await
+        .unwrap();
+    let body: Value = resp.json().await.unwrap();
+    let request_id = body["data"]["incoming_pending"][0]["request_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let resp = app
+        .client
+        .post(format!("{}/api/v1/friends/respond", app.base_url))
+        .header("Authorization", format!("Bearer {b_token}"))
+        .json(&json!({ "request_id": request_id, "accept": true }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200);
+}
+
+/// `POST /api/v1/walks` — host starts a walk. Returns session_id.
+async fn start_walk(app: &common::TestApp, host_token: &str) -> Uuid {
+    let resp = app
+        .client
+        .post(format!("{}/api/v1/walks", app.base_url))
+        .header("Authorization", format!("Bearer {host_token}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 201, "start walk must return 201");
+    let body: Value = resp.json().await.unwrap();
+    body["data"]["id"].as_str().unwrap().parse().unwrap()
+}
+
+/// Friend joins a walk via HTTP.
+async fn join_walk(app: &common::TestApp, session_id: Uuid, token: &str) {
+    let resp = app
+        .client
+        .post(format!("{}/api/v1/walks/{session_id}/join", app.base_url))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status().as_u16(), 200, "friend join must be 200");
+}
+
+// ── WebSocket helpers ─────────────────────────────────────────────────────────
+
+async fn connect_ws(app: &common::TestApp) -> Ws {
+    let ws_url = format!("{}/api/v1/ws", app.base_url.replacen("http", "ws", 1));
+    let (ws, _resp) = connect_async(ws_url).await.expect("ws connect failed");
+    ws
+}
+
+async fn send_json(ws: &mut Ws, v: Value) {
+    ws.send(Message::Text(v.to_string()))
+        .await
+        .expect("ws send failed");
+}
+
+/// Read the next application (JSON text) frame, skipping control frames.
+/// Returns `None` if the connection closes or no frame arrives within 5s.
+async fn next_json(ws: &mut Ws) -> Option<Value> {
+    loop {
+        match tokio::time::timeout(Duration::from_secs(5), ws.next()).await {
+            Err(_) => return None,          // read timeout
+            Ok(None) => return None,        // stream ended
+            Ok(Some(Ok(Message::Text(t)))) => {
+                return Some(serde_json::from_str(&t).expect("frame must be JSON"))
+            }
+            Ok(Some(Ok(Message::Close(_)))) => return None,
+            Ok(Some(Err(_))) => return None,
+            Ok(Some(Ok(_))) => continue, // ping/pong/binary/frame
+        }
+    }
+}
+
+fn ping_frame(session_id: Uuid, seq: i32, lat: f64, lng: f64) -> Value {
+    json!({
+        "type": "ping",
+        "session_id": session_id,
+        "seq": seq,
+        "lat": lat,
+        "lng": lng,
+        "recorded_at": chrono::Utc::now().to_rfc3339(),
+    })
+}
+
+// ── tests ─────────────────────────────────────────────────────────────────────
+
+/// First frame is not `Auth` → server rejects (error frame and/or close).
+#[tokio::test]
+async fn non_auth_first_frame_is_rejected() {
+    let app = common::spawn().await;
+    let (_, token) = register_user(&app, "ws_noauth@example.com").await;
+    let session_id = start_walk(&app, &token).await;
+
+    let mut ws = connect_ws(&app).await;
+    // Send a ping BEFORE authenticating.
+    send_json(&mut ws, ping_frame(session_id, 1, 52.0, 21.0)).await;
+
+    // Acceptable outcomes: an error frame (then close) OR an immediate close.
+    match next_json(&mut ws).await {
+        Some(v) => assert_eq!(
+            v["type"], "error",
+            "pre-auth frame must yield an error, got {v:?}"
+        ),
+        None => {} // closed immediately — also acceptable
+    }
+}
+
+/// Auth, then ping into own active session → receive a `ping_scored` frame.
+#[tokio::test]
+async fn auth_then_ping_own_session_receives_ping_scored() {
+    let app = common::spawn().await;
+    let (_, token) = register_user(&app, "ws_self@example.com").await;
+    let session_id = start_walk(&app, &token).await;
+
+    let mut ws = connect_ws(&app).await;
+    send_json(&mut ws, json!({ "type": "auth", "token": token })).await;
+    send_json(&mut ws, ping_frame(session_id, 1, 52.0, 21.0)).await;
+
+    let frame = next_json(&mut ws)
+        .await
+        .expect("must receive a ping_scored frame");
+    assert_eq!(frame["type"], "ping_scored", "got {frame:?}");
+    assert!(
+        frame["data"].get("points").is_some(),
+        "ping_scored data must carry a points field, got {frame:?}"
+    );
+}
+
+/// A member who subscribes receives another participant's `ping_scored`.
+#[tokio::test]
+async fn subscribed_member_receives_other_participants_ping() {
+    let app = common::spawn().await;
+    let (_, host_token) = register_user(&app, "ws_host@example.com").await;
+    let (friend_id, friend_token) = register_user(&app, "ws_friend@example.com").await;
+
+    make_friends(&app, &host_token, friend_id, &friend_token).await;
+    let session_id = start_walk(&app, &host_token).await;
+    join_walk(&app, session_id, &friend_token).await;
+
+    // B (friend) connects, auths, subscribes.
+    let mut b = connect_ws(&app).await;
+    send_json(&mut b, json!({ "type": "auth", "token": friend_token })).await;
+    send_json(&mut b, json!({ "type": "subscribe", "session_id": session_id })).await;
+
+    // Give B's subscription time to register before A publishes.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // A (host) connects, auths, pings.
+    let mut a = connect_ws(&app).await;
+    send_json(&mut a, json!({ "type": "auth", "token": host_token })).await;
+    send_json(&mut a, ping_frame(session_id, 1, 52.0, 21.0)).await;
+
+    let frame = next_json(&mut b)
+        .await
+        .expect("subscriber B must receive a ping_scored frame");
+    assert_eq!(frame["type"], "ping_scored", "got {frame:?}");
+}
+
+/// Subscribing to a session you are not a member of → error frame.
+#[tokio::test]
+async fn subscribe_non_member_session_yields_error() {
+    let app = common::spawn().await;
+    let (_, host_token) = register_user(&app, "ws_owner@example.com").await;
+    let (_, outsider_token) = register_user(&app, "ws_outsider@example.com").await;
+
+    let session_id = start_walk(&app, &host_token).await;
+
+    let mut ws = connect_ws(&app).await;
+    send_json(&mut ws, json!({ "type": "auth", "token": outsider_token })).await;
+    send_json(&mut ws, json!({ "type": "subscribe", "session_id": session_id })).await;
+
+    let frame = next_json(&mut ws)
+        .await
+        .expect("non-member subscribe must yield a frame");
+    assert_eq!(
+        frame["type"], "error",
+        "non-member subscribe must be an error, got {frame:?}"
+    );
+}
