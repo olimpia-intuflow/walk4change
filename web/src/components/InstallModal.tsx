@@ -5,6 +5,12 @@ import { LogoMark } from './Logo'
 
 const DISMISS_KEY = 'ss-install-dismissed'
 
+// Capture beforeinstallprompt at module load — before React mounts — so we never miss it
+let _earlyPip: any = null
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); _earlyPip = e }, { once: true })
+}
+
 function isStandalone() {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -25,6 +31,12 @@ export function InstallModal() {
   useEffect(() => {
     if (isStandalone()) return
     if (localStorage.getItem(DISMISS_KEY) === '1') return
+
+    // Use early-captured event if we already have one
+    if (_earlyPip) {
+      setDeferred(_earlyPip)
+      _earlyPip = null
+    }
 
     const onPrompt = (e: any) => {
       e.preventDefault()
@@ -75,7 +87,7 @@ export function InstallModal() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 24, scale: 0.96 }}
           transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-          className="glass fixed left-4 right-4 z-[60] rounded-3xl border border-white/70 p-4 shadow-[0_24px_60px_rgba(12,90,113,0.22)] sm:left-auto sm:right-6 sm:w-[330px] bottom-[calc(env(safe-area-inset-bottom,0px)+88px)] sm:bottom-6"
+          className="glass fixed left-4 right-4 z-[60] rounded-3xl border border-white/70 bg-white/95 p-4 shadow-[0_24px_60px_rgba(12,90,113,0.22)] sm:left-auto sm:right-6 sm:w-[330px] bottom-[calc(env(safe-area-inset-bottom,0px)+88px)] sm:bottom-6"
         >
           <button onClick={dismiss} aria-label="Zamknij" className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-sea/8 text-muted">
             <X size={14} weight="bold" />

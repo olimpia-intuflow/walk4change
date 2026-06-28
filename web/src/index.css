@@ -130,3 +130,6 @@
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
 }
+@supports not (backdrop-filter: blur(1px)) {
+  .glass { background: rgba(255, 255, 255, 0.97); }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { Camera, MapPin, PaperPlaneTilt, CheckCircle, Warning, Sparkle, Leaf } from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton } from '../components/ui'
@@ -20,6 +20,9 @@ export function Eco() {
   const [rewards, setRewards] = useState<Reward[]>([])
   const [sent, setSent] = useState(false)
   const [desc, setDesc] = useState('')
+  const [photoBefore, setPhotoBefore] = useState<string | null>(null)
+  const [photoAfter, setPhotoAfter] = useState<string | null>(null)
+  const [reportPhoto, setReportPhoto] = useState<string | null>(null)
 
   useEffect(() => {
     api.getEcoReports().then(setReports)
@@ -30,6 +33,9 @@ export function Eco() {
     setTab(t)
     setSent(false)
     setDesc('')
+    setPhotoBefore(null)
+    setPhotoAfter(null)
+    setReportPhoto(null)
   }
 
   return (
@@ -100,7 +106,7 @@ export function Eco() {
                 className="w-full resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-ink outline-none placeholder:text-muted/70 focus:ring-2 focus:ring-sea/30"
               />
               <div className="grid grid-cols-2 gap-2.5">
-                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie" />
+                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie" onFile={setReportPhoto} preview={reportPhoto} />
                 <UploadBtn icon={<MapPin size={18} />} label="Lokalizacja" />
               </div>
               <PrimaryButton onClick={() => setSent(true)} className="w-full">
@@ -126,8 +132,8 @@ export function Eco() {
                 className="w-full resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-ink outline-none placeholder:text-muted/70 focus:ring-2 focus:ring-leaf/30"
               />
               <div className="grid grid-cols-2 gap-2.5">
-                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PRZED" tone="leaf" />
-                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PO" tone="leaf" />
+                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PRZED" tone="leaf" onFile={setPhotoBefore} preview={photoBefore} />
+                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PO" tone="leaf" onFile={setPhotoAfter} preview={photoAfter} />
               </div>
               <PrimaryButton onClick={() => setSent(true)} className="w-full bg-gradient-to-br from-leaf to-sea">
                 <Sparkle size={18} /> Pochwal się
@@ -177,11 +183,35 @@ export function Eco() {
   )
 }
 
-function UploadBtn({ icon, label, tone = 'sea' }: { icon: ReactNode; label: string; tone?: 'sea' | 'leaf' }) {
+function UploadBtn({
+  icon, label, tone = 'sea', preview, onFile,
+}: {
+  icon: ReactNode; label: string; tone?: 'sea' | 'leaf';
+  preview?: string | null; onFile?: (url: string) => void;
+}) {
   const border = tone === 'leaf' ? 'border-leaf/40' : 'border-sea/40'
+  const ref = useRef<HTMLInputElement>(null)
   return (
-    <button className={`flex items-center justify-center gap-2 rounded-2xl border border-dashed ${border} bg-white/50 py-3 text-sm font-bold text-deep`}>
-      {icon} {label}
+    <button
+      type="button"
+      onClick={() => ref.current?.click()}
+      className={`relative flex min-h-[72px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-dashed ${border} bg-white/50 py-3 text-sm font-bold text-deep`}
+    >
+      {preview ? (
+        <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <>{icon} {label}</>
+      )}
+      <input
+        ref={ref}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file && onFile) onFile(URL.createObjectURL(file))
+        }}
+      />
     </button>
   )
 }

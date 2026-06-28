@@ -239,9 +239,11 @@ export function Home() {
         </div>
       </motion.div>
 
-      <motion.p {...fade(7)} className="mt-6 text-center text-xs leading-relaxed text-muted">
-        {isTeam ? 'Razem robicie więcej — i dla zespołu, i dla Bałtyku' : 'Każdy krok liczy się podwójnie, gdy idziesz nad wodą'}
-      </motion.p>
+      {isTeam && (
+        <motion.p {...fade(7)} className="mt-6 text-center text-xs leading-relaxed text-muted">
+          Razem robicie więcej — i dla zespołu, i dla Bałtyku
+        </motion.p>
+      )}
     </div>
   )
 }

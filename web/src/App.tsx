@@ -1,4 +1,5 @@
-import { Routes, Route, Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { Login } from './screens/Login'
 import { Home } from './screens/Home'
@@ -11,6 +12,12 @@ import { History } from './screens/History'
 import { Partners } from './screens/Partners'
 import { MagicVerify } from './screens/MagicVerify'
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  return null
+}
+
 /** Layout apki — responsywny shell (sidebar/bottom-nav). */
 function AppLayout() {
   return (
@@ -22,6 +29,8 @@ function AppLayout() {
 
 function App() {
   return (
+    <>
+    <ScrollToTop />
     <Routes>
       {/* logowanie / zakładanie konta — pełny ekran, bez shellu */}
       <Route path="/login" element={<Login />} />
@@ -40,6 +49,7 @@ function App() {
         <Route path="*" element={<Home />} />
       </Route>
     </Routes>
+    </>
   )
 }
 
