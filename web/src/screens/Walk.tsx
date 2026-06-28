@@ -137,21 +137,39 @@ export function Walk() {
     } finally { setBusy(false) }
   }
 
-  const connectAndStream = (id: string) => {
-    socketRef.current?.close()
-    walkersRef.current = new Map(); flush()
-    seqRef.current = 0; setSec(0); setSummary(null); resetSteps()
+  const makeSock = (id: string) => {
     const sock = new LiveSocket({
       onOpen: () => { sock.subscribeSession(id); sock.subscribeLeaderboard() },
       onPingScored: onPing,
       onLeaderboard,
       onError: (m) => setError(m),
+      onClose: () => { socketRef.current = null },
     })
-    socketRef.current = sock
     sock.connect()
+    return sock
+  }
+
+  const connectAndStream = (id: string) => {
+    socketRef.current?.close()
+    walkersRef.current = new Map(); flush()
+    seqRef.current = 0; setSec(0); setSummary(null); resetSteps()
+    socketRef.current = makeSock(id)
     startGps(id)
     setPhase('active')
   }
+
+  // Re-connect WS when app returns to foreground mid-walk
+  useEffect(() => {
+    if (phase !== 'active') return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !socketRef.current) {
+        setError(null)
+        socketRef.current = makeSock(sessionId)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [phase, sessionId])
 
   const startWalk = async () => {
     if (busy) return

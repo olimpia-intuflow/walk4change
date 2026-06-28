@@ -10,7 +10,7 @@ import { SponsorIcon } from '../components/SponsorIcon'
 import { Glyph } from '../components/Glyph'
 import { Avatar } from '../components/Avatar'
 import { useMode } from '../lib/mode'
-import { api, type TodayStats, type Reward, type TeamToday, type Sponsor } from '../lib/api'
+import { api, type TodayStats, type Reward, type TeamToday, type Sponsor, type Profile } from '../lib/api'
 
 function Ring({ value, children }: { value: number; children: ReactNode }) {
   const r = 52
@@ -54,6 +54,7 @@ const fade = (i: number) => ({
 export function Home() {
   const nav = useNavigate()
   const { mode } = useMode()
+  const [profile, setProfile] = useState<Profile | null>(null)
   const [today, setToday] = useState<TodayStats | null>(null)
   const [team, setTeam] = useState<TeamToday | null>(null)
   const [rewards, setRewards] = useState<Reward[]>([])
@@ -61,6 +62,7 @@ export function Home() {
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
 
   useEffect(() => {
+    api.getProfile().then(setProfile).catch(() => {})
     api.getToday().then(setToday)
     api.getRewards().then(setRewards)
     api.getTeamToday().then(setTeam)
@@ -78,7 +80,7 @@ export function Home() {
         </div>
         <div className="flex items-center gap-2">
           <ModeToggle />
-          <Avatar name="Ola" size={40} />
+          <Avatar name={profile?.name ?? ''} size={40} />
         </div>
       </motion.div>
 
@@ -93,7 +95,7 @@ export function Home() {
           </>
         ) : (
           <p className="font-display text-[26px] font-semibold leading-tight text-ink">
-            Cześć Ola<br />
+            {profile ? `Cześć ${profile.name.split(' ')[0]}` : 'Cześć!'}<br />
             <span className="text-base font-body text-muted">Dobry dzień na spacer nad wodą.</span>
           </p>
         )}
