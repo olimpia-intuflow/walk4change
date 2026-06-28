@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
-import { Routes, Route, Outlet, useLocation } from 'react-router-dom'
+import { Routes, Route, Outlet, useLocation, Navigate } from 'react-router-dom'
+import { isAuthed, setAuthed } from './lib/auth'
+import { getToken } from './lib/http'
 import { AppShell } from './components/AppShell'
 import { Login } from './screens/Login'
 import { Home } from './screens/Home'
@@ -16,6 +18,16 @@ function ScrollToTop() {
   const { pathname } = useLocation()
   useEffect(() => { window.scrollTo(0, 0) }, [pathname])
   return null
+}
+
+/** Guard: kick stale demo sessions (authed flag set but no real JWT). */
+function RequireAuth() {
+  if (isAuthed() && !getToken()) {
+    setAuthed(false)
+    return <Navigate to="/login" replace />
+  }
+  if (!isAuthed()) return <Navigate to="/login" replace />
+  return <Outlet />
 }
 
 /** Layout apki — responsywny shell (sidebar/bottom-nav). */
@@ -35,7 +47,8 @@ function App() {
       {/* logowanie / zakładanie konta — pełny ekran, bez shellu */}
       <Route path="/login" element={<Login />} />
 
-      {/* aplikacja */}
+      {/* aplikacja — wymaga zalogowania */}
+      <Route element={<RequireAuth />}>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/walk" element={<Walk />} />
@@ -47,6 +60,7 @@ function App() {
         <Route path="/partners" element={<Partners />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="*" element={<Home />} />
+      </Route>
       </Route>
     </Routes>
     </>

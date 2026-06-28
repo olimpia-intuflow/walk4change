@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Envelope, Lock, ArrowRight, Footprints, Leaf, UsersThree } from '@phosphor-icons/react'
+import { Envelope, Lock, ArrowRight, Footprints, Leaf, UsersThree, Warning } from '@phosphor-icons/react'
 import { Logo } from '../components/Logo'
 import { FootstepTrail } from '../components/Footsteps'
-import { setAuthed } from '../lib/auth'
+import { login, register } from '../lib/auth'
 
 type Tab = 'login' | 'signup'
 
@@ -13,10 +13,26 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
   const [pass2, setPass2] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const enter = () => {
-    setAuthed(true)
-    nav('/')
+  const submit = async () => {
+    setError(null)
+    if (!email || !pass) { setError('Podaj e-mail i hasło.'); return }
+    if (tab === 'signup' && pass !== pass2) { setError('Hasła się nie zgadzają.'); return }
+    setLoading(true)
+    try {
+      if (tab === 'login') {
+        await login(email, pass)
+      } else {
+        await register(email, pass, email.split('@')[0])
+      }
+      nav('/')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Błąd logowania.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -51,13 +67,13 @@ export function Login() {
           {/* zakładki */}
           <div className="mb-6 inline-flex w-full rounded-2xl bg-sea/8 p-1 text-sm font-bold">
             <button
-              onClick={() => setTab('login')}
+              onClick={() => { setTab('login'); setError(null) }}
               className={`flex-1 rounded-xl py-2.5 transition ${tab === 'login' ? 'bg-white text-deep shadow' : 'text-muted'}`}
             >
               Zaloguj się
             </button>
             <button
-              onClick={() => setTab('signup')}
+              onClick={() => { setTab('signup'); setError(null) }}
               className={`flex-1 rounded-xl py-2.5 transition ${tab === 'signup' ? 'bg-white text-deep shadow' : 'text-muted'}`}
             >
               Załóż konto
@@ -93,15 +109,18 @@ export function Login() {
             </>
           )}
 
-          <button
-            onClick={enter}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-sea to-deep py-3.5 text-base font-bold text-white shadow-[0_16px_30px_rgba(12,90,113,0.25)] transition active:scale-95"
-          >
-            {tab === 'login' ? 'Zaloguj się' : 'Załóż konto'} <ArrowRight size={18} />
-          </button>
+          {error && (
+            <div className="mt-3 flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              <Warning size={16} weight="fill" /> {error}
+            </div>
+          )}
 
-          <button onClick={enter} className="mt-3 w-full rounded-2xl border border-white/70 bg-white/80 py-3.5 text-sm font-bold text-deep transition active:scale-95">
-            Wejdź jako gość (demo)
+          <button
+            onClick={submit}
+            disabled={loading}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-sea to-deep py-3.5 text-base font-bold text-white shadow-[0_16px_30px_rgba(12,90,113,0.25)] transition active:scale-95 disabled:opacity-60"
+          >
+            {loading ? 'Chwilka…' : tab === 'login' ? 'Zaloguj się' : 'Załóż konto'} {!loading && <ArrowRight size={18} />}
           </button>
         </div>
       </div>

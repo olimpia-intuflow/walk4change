@@ -39,15 +39,8 @@ export function setCurrentUserId(id: string | null): void {
   }
 }
 
-/**
- * Logowanie e-mail + hasło. Bez backendu (tryb mock) po prostu wpuszcza do apki.
- * Z backendem: POST /auth/login, zapis tokenu JWT. Rzuca ApiError przy błędzie.
- */
+/** Logowanie e-mail + hasło. POST /auth/login, zapis tokenu JWT. Rzuca ApiError przy błędzie. */
 export async function login(email: string, password: string): Promise<void> {
-  if (!hasBackend()) {
-    setAuthed(true)
-    return
-  }
   const res = await apiRequest<unknown>('/auth/login', {
     method: 'POST',
     auth: false,
@@ -57,12 +50,8 @@ export async function login(email: string, password: string): Promise<void> {
   setAuthed(true)
 }
 
-/** Rejestracja konta (POST /auth/register). Mock bez backendu. */
+/** Rejestracja konta (POST /auth/register). */
 export async function register(email: string, password: string, displayName: string): Promise<void> {
-  if (!hasBackend()) {
-    setAuthed(true)
-    return
-  }
   const res = await apiRequest<{ id?: string }>('/auth/register', {
     method: 'POST',
     auth: false,
@@ -70,11 +59,6 @@ export async function register(email: string, password: string, displayName: str
   })
   if (res.token) setToken(res.token)
   if (res.data?.id) setCurrentUserId(res.data.id)
-  setAuthed(true)
-}
-
-/** Wejście demo (gość) — zawsze tryb mock, bez realnego backendu. */
-export function guestEnter(): void {
   setAuthed(true)
 }
 

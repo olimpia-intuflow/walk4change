@@ -1,20 +1,14 @@
 /**
  * SeaSteps — warstwa danych.
  *
- * NA TERAZ: zwraca dane mockowe (demo na hackathon).
- * PÓŹNIEJ: backend Kamila (Rust/Axum) wystawia REST + WebSocket.
- *   Wystarczy ustawić VITE_API_BASE w .env i zamienić ciała funkcji na fetch().
- *   Kształt typów poniżej jest celowo zgodny z trasami backendu:
- *   /auth, /walks, /friends, /leaderboard, /profile, /rewards.
- *
  * Mnożniki punktów (zgodne ze scoring engine backendu):
  *   spacer z kimś ×1.5, strefa natury ×3 — i one się mnożą (stackują).
  */
 
-import { apiRequest, getToken, hasBackend, API_BASE } from './http'
+import { apiRequest, API_BASE } from './http'
 import { currentUserId, setCurrentUserId } from './auth'
 
-export { API_BASE } // '' = tryb mock (re-eksport dla zgodności)
+export { API_BASE }
 
 // ── Typy (kontrakt z backendem) ───────────────────────────
 export interface Profile {
@@ -102,21 +96,6 @@ export function computeWalkPoints(opts: {
   return { base, total: Math.round(base * multiplier), multiplier }
 }
 
-// ── Mocki demo ────────────────────────────────────────────
-const me: Profile = {
-  id: 'me',
-  name: 'Ola',
-  avatar: '🌊',
-  interests: ['Spacery nad morzem', 'Natura', 'Mindfulness', 'Eko'],
-  stats: { walks: 23, events: 4, ecoReports: 6 },
-  badges: [
-    { id: 'b1', label: 'Pierwszy spacer', iconKey: 'firststep' },
-    { id: 'b2', label: '7 dni z rzędu', iconKey: 'streak' },
-    { id: 'b3', label: 'Strażniczka brzegu', iconKey: 'shore' },
-    { id: 'b4', label: 'Sadziła drzewo', iconKey: 'tree' },
-  ],
-}
-
 const today: TodayStats = {
   steps: 6842,
   points: 148,
@@ -138,23 +117,11 @@ const events: EventItem[] = [
   { id: 'e3', title: 'Spacer społeczny nad Zatoką', type: 'social', date: 'Pt 27.06 • 18:00', place: 'Bulwar Nadmorski', peopleCount: 24, points: 60 },
 ]
 
-const rewards: Reward[] = [
-  { id: 'r1', title: 'Adopcja foki', kind: 'Cel ekologiczny', iconKey: 'seal', progress: 72 },
-  { id: 'r2', title: 'Posadzenie drzewa', kind: 'Cel ekologiczny', iconKey: 'tree', progress: 45 },
-  { id: 'r3', title: 'Voucher partnera', kind: 'Nagroda lokalna', iconKey: 'voucher', progress: 30 },
-]
-
 const ecoReports: EcoReport[] = [
   { id: 'x1', type: 'Śmieci na brzegu', description: 'Worek śmieci przy wejściu na plażę', location: 'Brzeźno, molo', status: 'cleaned' },
   { id: 'x2', type: 'Większe zanieczyszczenie', description: 'Rozlana substancja przy kanale', location: 'Górki Zachodnie', status: 'reported' },
 ]
 
-const leaderboard: LeaderboardRow[] = [
-  { rank: 1, name: 'Marta', avatar: '🧘', points: 312 },
-  { rank: 2, name: 'Bek', avatar: '🚶', points: 268 },
-  { rank: 3, name: 'Ola', avatar: '🌊', points: 148, isMe: true },
-  { rank: 4, name: 'Kamil', avatar: '🏃', points: 134 },
-]
 
 // ── Ludzie do dopasowania (matching-lite) ─────────────────
 export interface MatchPerson {
@@ -261,16 +228,8 @@ const teamRewards: Reward[] = [
   { id: 'tr3', title: 'Dzień wellbeing', kind: 'Nagroda firmowa', iconKey: 'wellbeing', progress: 28 },
 ]
 
-// symulacja opóźnienia sieci, żeby UI był „prawdziwy"
 const wait = <T>(data: T, ms = 150): Promise<T> =>
   new Promise((res) => setTimeout(() => res(data), ms))
-
-// ── Realny backend (gdy VITE_API_BASE ustawione i mamy token) ─────────────
-// Tylko część ekranów ma odpowiednik w backendzie (profil, nagrody, ranking).
-// Reszta (eventy, eko, sponsorzy, zespoły, dopasowania, „dziś") to nadal mock.
-
-/** Czy używać realnego backendu dla danego wywołania. */
-const live = (): boolean => hasBackend() && !!getToken()
 
 interface BackendProfile {
   id: string
@@ -350,31 +309,16 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   return (res.data ?? []).map((row, i) => mapLeaderRow(row, i, myId))
 }
 
-/**
- * Realny fetch z miękkim fallbackiem na mock. Dzięki temu apka działa nawet,
- * gdy backend chwilowo nie odpowiada (demo na hackathonie nie pada).
- */
-async function liveOrMock<T>(fetcher: () => Promise<T>, mock: T, label: string): Promise<T> {
-  if (!live()) return wait(mock)
-  try {
-    return await fetcher()
-  } catch (err) {
-    console.warn(`[api] ${label}: backend niedostępny, używam mocka`, err)
-    return mock
-  }
-}
-
 export const api = {
-  getProfile: () => liveOrMock(fetchProfile, me, 'getProfile'),
+  getProfile: fetchProfile,
   getToday: () => wait(today),
   getCommunityWalks: () => wait(communityWalks),
   getEvents: () => wait(events),
-  getRewards: () => liveOrMock(fetchRewards, rewards, 'getRewards'),
+  getRewards: fetchRewards,
   getEcoReports: () => wait(ecoReports),
-  getLeaderboard: () => liveOrMock(fetchLeaderboard, leaderboard, 'getLeaderboard'),
+  getLeaderboard: fetchLeaderboard,
   getMatches: () => wait(people),
   getSponsors: () => wait(sponsors),
-  // wariant korporacyjny (brak w backendzie — zawsze mock)
   getTeamToday: () => wait(teamToday),
   getTeamLeaderboard: () => wait(teamLeaderboard),
   getCorporateEvents: () => wait(corporateEvents),
