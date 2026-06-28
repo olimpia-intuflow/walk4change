@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Footprints, Flame, Leaf, UsersThree, CalendarHeart, Warning, Sparkle, Buildings, Storefront, CaretRight } from '@phosphor-icons/react'
+import { Logo } from '../components/Logo'
 import { ModeToggle } from '../components/ModeToggle'
 import { FootstepTrail } from '../components/Footsteps'
 import { Card, Pill, ProgressBar } from '../components/ui'
@@ -71,9 +72,14 @@ export function Home() {
 
   return (
     <div className="px-5 pt-5">
-      <motion.div {...fade(0)} className="flex items-center justify-between gap-3">
-        <ModeToggle />
-        <Avatar name="Ola" size={40} />
+      <motion.div {...fade(0)} className="flex items-center justify-between gap-2">
+        <div className="lg:invisible">
+          <Logo />
+        </div>
+        <div className="flex items-center gap-2">
+          <ModeToggle />
+          <Avatar name="Ola" size={38} />
+        </div>
       </motion.div>
 
       {/* greeting */}
