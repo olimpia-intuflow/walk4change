@@ -1,7 +1,9 @@
 /**
- * Żywa mapka spaceru: rzutuje realne punkty GPS (lat/lng) na SVG, auto-dopasowując
- * widok do otrzymanych punktów. Jeden kolorowy ślad + „głowa" na każdego spacerowicza.
+ * Żywa mapka spaceru: rzutuje realne punkty GPS (lat/lng) na SVG. Granice widoku
+ * rozszerzają się tylko „na zewnątrz" (expand-only) i nigdy się nie kurczą, więc
+ * ślad nie skacze ani nie przeskalowuje się przy każdym pingu.
  */
+import { useRef } from 'react'
 
 export interface MapWalker {
   userId: string
@@ -14,24 +16,43 @@ export interface MapWalker {
 const W = 320
 const PAD = 26
 
+type Bounds = { minLat: number; maxLat: number; minLng: number; maxLng: number }
+
 export function LiveMap({ walkers, height = 220 }: { walkers: MapWalker[]; height?: number }) {
   const H = height
   const all = walkers.flatMap((w) => w.trail)
 
-  // Auto-fit bounds (with a tiny epsilon so a single point still renders centered).
-  const lats = all.map((p) => p.lat)
-  const lngs = all.map((p) => p.lng)
-  const minLat = lats.length ? Math.min(...lats) : 0
-  const maxLat = lats.length ? Math.max(...lats) : 0
-  const minLng = lngs.length ? Math.min(...lngs) : 0
-  const maxLng = lngs.length ? Math.max(...lngs) : 0
-  const spanLat = Math.max(maxLat - minLat, 1e-5)
-  const spanLng = Math.max(maxLng - minLng, 1e-5)
+  // Expand-only bounds: once the view has grown to fit a point it never shrinks
+  // back, so a noisy ping can't rescale the whole path (the "jittery" effect).
+  const boundsRef = useRef<Bounds | null>(null)
+  if (all.length) {
+    const b = boundsRef.current ?? {
+      minLat: all[0].lat, maxLat: all[0].lat, minLng: all[0].lng, maxLng: all[0].lng,
+    }
+    for (const p of all) {
+      if (p.lat < b.minLat) b.minLat = p.lat
+      if (p.lat > b.maxLat) b.maxLat = p.lat
+      if (p.lng < b.minLng) b.minLng = p.lng
+      if (p.lng > b.maxLng) b.maxLng = p.lng
+    }
+    boundsRef.current = b
+  }
+  const b = boundsRef.current
+  const minLat = b?.minLat ?? 0
+  const maxLat = b?.maxLat ?? 0
+  const minLng = b?.minLng ?? 0
+  const maxLng = b?.maxLng ?? 0
+  // Margin so the head marker/labels never clip the path against the frame edge.
+  const spanLat = Math.max((maxLat - minLat) * 1.25, 1e-4)
+  const spanLng = Math.max((maxLng - minLng) * 1.25, 1e-4)
 
+  // Center the data within the (margin-inflated) span.
+  const cLng = (minLng + maxLng) / 2
+  const cLat = (minLat + maxLat) / 2
   const project = (p: { lat: number; lng: number }): [number, number] => {
-    const x = PAD + ((p.lng - minLng) / spanLng) * (W - 2 * PAD)
+    const x = PAD + (0.5 + (p.lng - cLng) / spanLng) * (W - 2 * PAD)
     // invert lat so north is up
-    const y = PAD + ((maxLat - p.lat) / spanLat) * (H - 2 * PAD)
+    const y = PAD + (0.5 - (p.lat - cLat) / spanLat) * (H - 2 * PAD)
     return [x, y]
   }
 

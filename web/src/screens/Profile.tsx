@@ -5,7 +5,7 @@ import { Footprints, CalendarHeart, Recycle, GearSix, PencilSimple, Check } from
 import { Card, Pill } from '../components/ui'
 import { Glyph } from '../components/Glyph'
 import { FootstepTrail } from '../components/Footsteps'
-import { api, INTEREST_OPTIONS, type Profile as ProfileT } from '../lib/api'
+import { api, INTEREST_OPTIONS, type Profile as ProfileT, type EcoReport } from '../lib/api'
 import { getInterests, saveInterests } from '../lib/interests'
 import { getGender, saveGender, type Gender } from '../lib/settings'
 
@@ -15,6 +15,10 @@ export function Profile() {
   const [interests, setInterests] = useState<string[]>(getInterests())
   const [editing, setEditing] = useState(false)
   const [gender, setGender] = useState<Gender>(getGender())
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
+  const [ecoReports, setEcoReports] = useState<EcoReport[]>([])
 
   const pickGender = (g: Gender) => {
     setGender(g)
@@ -23,6 +27,7 @@ export function Profile() {
 
   useEffect(() => {
     api.getProfile().then(setP)
+    api.getMyEcoReports().then(setEcoReports).catch(() => {})
   }, [])
 
   const toggle = (tag: string) =>
@@ -31,6 +36,19 @@ export function Profile() {
   const finishEdit = () => {
     saveInterests(interests)
     setEditing(false)
+  }
+
+  const saveName = async () => {
+    const name = nameInput.trim()
+    if (!name || !p) return
+    setNameSaving(true)
+    try {
+      const updated = await api.patchProfile(name)
+      setP({ ...p, name: updated.name })
+    } catch { /* ignore */ } finally {
+      setNameSaving(false)
+      setEditingName(false)
+    }
   }
 
   if (!p) return null
@@ -54,7 +72,27 @@ export function Profile() {
           >
             {p.name.charAt(0)}
           </motion.div>
-          <h2 className="mt-3 font-display text-2xl font-bold text-ink">{p.name}</h2>
+          {editingName ? (
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <input
+                autoFocus
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveName()}
+                className="rounded-xl border border-sea/30 bg-white/80 px-3 py-1.5 text-center font-display text-xl font-bold text-ink outline-none focus:ring-2 focus:ring-sea/30"
+              />
+              <button onClick={saveName} disabled={nameSaving} className="grid h-8 w-8 place-items-center rounded-full bg-sea/15 text-sea disabled:opacity-50">
+                <Check size={15} weight="bold" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setNameInput(p.name); setEditingName(true) }}
+              className="mt-3 inline-flex items-center gap-1.5 font-display text-2xl font-bold text-ink"
+            >
+              {p.name} <PencilSimple size={16} className="text-muted" />
+            </button>
+          )}
 
           <div className="mt-2 inline-flex rounded-full bg-white/70 p-1 text-xs font-bold ring-1 ring-white/60">
             <button
@@ -146,6 +184,41 @@ export function Profile() {
             </motion.div>
           ))}
         </div>
+
+        {/* moje zgłoszenia eko */}
+        {ecoReports.length > 0 && (
+          <>
+            <h2 className="mb-3 mt-6 font-display text-lg font-bold text-ink">Moje zgłoszenia eko</h2>
+            <div className="space-y-2.5">
+              {ecoReports.map((r) => {
+                const thumb = r.photoAfterUrl || r.photoUrl || r.photoBeforeUrl
+                return (
+                  <Card key={r.id} className="flex items-center gap-3 p-3.5">
+                    {thumb ? (
+                      <img src={thumb} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                    ) : (
+                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-leaf/15 text-leaf">
+                        <Recycle size={18} />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-bold text-ink">
+                        {r.kind === 'cleanup' ? 'Posprzątane' : 'Zgłoszenie'}{r.type ? ` • ${r.type}` : ''}
+                      </div>
+                      <div className="truncate text-xs text-muted">{r.description || '—'}</div>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        <p className="mt-8 text-center text-xs text-muted">
+          <a href="/privacy.html" target="_blank" rel="noopener" className="underline transition hover:text-sea">
+            Polityka Prywatności
+          </a>
+        </p>
 
       </div>
     </div>

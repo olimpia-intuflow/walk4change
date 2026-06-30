@@ -1,11 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
-const STRIDE_M = 0.75
-const ALPHA = 0.1          // low-pass filter: isolate gravity baseline
-const PEAK_THRESHOLD = 1.2 // m/s² above filtered baseline → step
-const MIN_STEP_MS = 250    // debounce: no two steps within 250 ms
+const STRIDE_M = 0.75 // meters per step (average adult stride)
 
-type StepSource = 'accelerometer' | 'gps'
+type StepSource = 'gps'
 
 export interface StepCounterResult {
   steps: number
@@ -16,61 +13,24 @@ export interface StepCounterResult {
   reset: () => void
 }
 
+/**
+ * GPS-primary step counter.
+ *
+ * Steps are derived purely from server-credited GPS distance
+ * (`steps = round(meters / stride)`). This is robust across devices:
+ * Android browsers frequently expose `devicemotion` but never trip a reliable
+ * step peak (or the sensor is absent), which previously left the accelerometer
+ * "active" while counting zero steps AND suppressing the GPS fallback.
+ *
+ * Because the backend already speed-caps + jitter-deadbands distance, GPS steps
+ * are stationary-safe for free: standing still credits 0 m → 0 steps.
+ */
 export function useStepCounter(): StepCounterResult {
   const [steps, setSteps] = useState(0)
-  const [source, setSource] = useState<StepSource>('gps')
-  const [permissionNeeded, setPermissionNeeded] = useState(false)
-
-  const accelActiveRef = useRef(false)
-  const filteredRef = useRef(0)
-  const lastStepAtRef = useRef(0)
   const gpsAccumRef = useRef(0)
 
-  const onMotion = useCallback((e: DeviceMotionEvent) => {
-    const a = e.accelerationIncludingGravity
-    if (!a) return
-    const mag = Math.sqrt((a.x ?? 0) ** 2 + (a.y ?? 0) ** 2 + (a.z ?? 0) ** 2)
-    filteredRef.current = ALPHA * mag + (1 - ALPHA) * filteredRef.current
-    const delta = mag - filteredRef.current
-    const now = Date.now()
-    if (delta > PEAK_THRESHOLD && now - lastStepAtRef.current > MIN_STEP_MS) {
-      lastStepAtRef.current = now
-      setSteps((s) => s + 1)
-    }
-  }, [])
-
-  const startAccelerometer = useCallback(() => {
-    accelActiveRef.current = true
-    setSource('accelerometer')
-    window.addEventListener('devicemotion', onMotion)
-  }, [onMotion])
-
-  useEffect(() => {
-    if (typeof DeviceMotionEvent === 'undefined') return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (typeof (DeviceMotionEvent as any).requestPermission === 'function') {
-      setPermissionNeeded(true)
-      return
-    }
-    startAccelerometer()
-    return () => window.removeEventListener('devicemotion', onMotion)
-  }, [onMotion, startAccelerometer])
-
-  const requestPermission = useCallback(async () => {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (DeviceMotionEvent as any).requestPermission()
-      if (result === 'granted') {
-        startAccelerometer()
-        setPermissionNeeded(false)
-      }
-    } catch {
-      /* denied — stay on GPS fallback */
-    }
-  }, [startAccelerometer])
-
   const addMeters = useCallback((m: number) => {
-    if (accelActiveRef.current) return
+    if (m <= 0) return
     gpsAccumRef.current += m / STRIDE_M
     setSteps(Math.round(gpsAccumRef.current))
   }, [])
@@ -78,9 +38,10 @@ export function useStepCounter(): StepCounterResult {
   const reset = useCallback(() => {
     setSteps(0)
     gpsAccumRef.current = 0
-    filteredRef.current = 0
-    lastStepAtRef.current = 0
   }, [])
 
-  return { steps, source, permissionNeeded, requestPermission, addMeters, reset }
+  // Accelerometer permission is no longer used; keep the interface stable.
+  const requestPermission = useCallback(async () => {}, [])
+
+  return { steps, source: 'gps', permissionNeeded: false, requestPermission, addMeters, reset }
 }

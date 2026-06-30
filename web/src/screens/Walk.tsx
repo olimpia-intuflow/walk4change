@@ -68,7 +68,7 @@ export function Walk() {
   const watchRef = useRef<number | null>(null)
   const lastSentRef = useRef(0)
   const [summary, setSummary] = useState<{ points: number; meters: number; steps: number; together: boolean; nature: boolean } | null>(null)
-  const { steps, source: stepSource, permissionNeeded, requestPermission, addMeters, reset: resetSteps } = useStepCounter()
+  const { steps, permissionNeeded, requestPermission, addMeters, reset: resetSteps } = useStepCounter()
 
   useEffect(() => {
     if (phase === 'active') {
@@ -202,11 +202,17 @@ export function Walk() {
     watchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsNote(null)
+        const acc = pos.coords.accuracy
+        // Drop poor-fix readings client-side: a wide accuracy radius drifts
+        // several metres while standing still and would mint phantom points.
+        if (typeof acc === 'number' && acc > 35) return
         const now = Date.now()
-        if (now - lastSentRef.current < 1200) return
+        // ~4 s cadence so genuine walking (>~1 m/s) clears the server's 5 m
+        // jitter deadband, while stationary drift stays under it.
+        if (now - lastSentRef.current < 4000) return
         lastSentRef.current = now
         seqRef.current += 1
-        socketRef.current?.sendPing(id, seqRef.current, pos.coords.latitude, pos.coords.longitude)
+        socketRef.current?.sendPing(id, seqRef.current, pos.coords.latitude, pos.coords.longitude, acc)
       },
       (err) => setGpsNote(`GPS niedostępny: ${err.message}. Włącz lokalizację i odśwież.`),
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
@@ -312,7 +318,7 @@ export function Walk() {
                   <Pill tone="leaf"><Leaf size={12} /> natura ×{mine?.nature ?? 1}</Pill>
                   <Pill tone="sea"><UsersThree size={12} /> we dwoje ×{mine?.together ?? 1}</Pill>
                   {combined > 1 && <Pill tone="sand">razem ×{combined.toFixed(1)}</Pill>}
-                  <Pill tone="muted"><Footprints size={12} /> {stepSource === 'accelerometer' ? 'sensor' : 'GPS'}</Pill>
+                  <Pill tone="muted"><Footprints size={12} /> GPS</Pill>
                 </div>
                 {permissionNeeded && (
                   <button onClick={requestPermission} className="mt-3 w-full rounded-2xl bg-sea/10 py-2 text-xs font-bold text-sea">

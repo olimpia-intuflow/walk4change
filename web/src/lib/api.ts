@@ -5,7 +5,7 @@
  *   spacer z kimś ×1.5, strefa natury ×3 — i one się mnożą (stackują).
  */
 
-import { apiRequest, API_BASE } from './http'
+import { apiRequest, API_BASE, hasBackend } from './http'
 import { currentUserId, setCurrentUserId } from './auth'
 
 export { API_BASE }
@@ -67,10 +67,26 @@ export interface Reward {
 
 export interface EcoReport {
   id: string
+  /** 'report' (problem) | 'cleanup' (pochwała) */
+  kind?: 'report' | 'cleanup'
   type: string
   description: string
   location: string
   status: 'open' | 'cleaned' | 'reported'
+  photoUrl?: string | null
+  photoBeforeUrl?: string | null
+  photoAfterUrl?: string | null
+  createdAt?: string
+}
+
+export interface CreateEcoInput {
+  kind: 'report' | 'cleanup'
+  category?: string
+  description?: string
+  location?: string
+  photoUrl?: string | null
+  photoBeforeUrl?: string | null
+  photoAfterUrl?: string | null
 }
 
 export interface LeaderboardRow {
@@ -290,12 +306,128 @@ function mapLeaderRow(row: BackendLeaderRow, index: number, myId: string | null)
   }
 }
 
+interface BackendStats {
+  today_steps: string
+  today_points: string
+  today_meters: string
+  total_points: string
+  total_walks: number
+  streak_days: number
+}
+
 async function fetchProfile(): Promise<Profile> {
   const res = await apiRequest<BackendProfile>('/me')
   const p = res.data
   if (!p) throw new Error('Brak danych profilu')
   setCurrentUserId(p.id)
   return mapProfile(p)
+}
+
+async function patchProfile(display_name: string): Promise<Profile> {
+  const res = await apiRequest<BackendProfile>('/me', { method: 'PATCH', body: { display_name } })
+  const p = res.data
+  if (!p) throw new Error('Brak danych profilu')
+  return mapProfile(p)
+}
+
+async function fetchStats(): Promise<TodayStats> {
+  const res = await apiRequest<BackendStats>('/me/stats')
+  const s = res.data
+  if (!s) return today // fallback to mock when no data yet
+  return {
+    steps: Math.round(parseFloat(s.today_steps)),
+    points: Math.round(parseFloat(s.today_points)),
+    streakDays: s.streak_days,
+    rewardProgress: Math.min(100, Math.round(parseFloat(s.total_points) / 10)),
+    natureBonusActive: false,
+    togetherBonusActive: false,
+  }
+}
+
+interface BackendEcoReport {
+  id: string
+  kind: 'report' | 'cleanup'
+  category: string
+  description: string
+  location: string
+  status: 'open' | 'cleaned' | 'reported'
+  photo_url: string | null
+  photo_before_url: string | null
+  photo_after_url: string | null
+  created_at: string
+}
+
+function mapEcoReport(r: BackendEcoReport): EcoReport {
+  return {
+    id: r.id,
+    kind: r.kind,
+    type: r.category || (r.kind === 'cleanup' ? 'Posprzątane' : 'Zgłoszenie'),
+    description: r.description,
+    location: r.location,
+    status: r.status,
+    photoUrl: r.photo_url,
+    photoBeforeUrl: r.photo_before_url,
+    photoAfterUrl: r.photo_after_url,
+    createdAt: r.created_at,
+  }
+}
+
+/** Upload a photo to Supabase Storage (`eco-photos`); returns its public URL. */
+export async function uploadEcoPhoto(file: File): Promise<string | null> {
+  try {
+    const { supabase, hasSupabase } = await import('./supabase')
+    if (!hasSupabase()) return null
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const id = (crypto as Crypto & { randomUUID?: () => string }).randomUUID?.() ?? `${Date.now()}-${Math.round(Math.random() * 1e9)}`
+    const path = `${id}.${ext}`
+    const { error } = await supabase.storage.from('eco-photos').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || 'image/jpeg',
+    })
+    if (error) return null
+    const { data } = supabase.storage.from('eco-photos').getPublicUrl(path)
+    return data.publicUrl ?? null
+  } catch {
+    return null
+  }
+}
+
+async function createEcoReport(input: CreateEcoInput): Promise<EcoReport | null> {
+  if (!hasBackend()) return null
+  const res = await apiRequest<BackendEcoReport>('/eco/reports', {
+    method: 'POST',
+    body: {
+      kind: input.kind,
+      category: input.category ?? '',
+      description: input.description ?? '',
+      location: input.location ?? '',
+      photo_url: input.photoUrl ?? null,
+      photo_before_url: input.photoBeforeUrl ?? null,
+      photo_after_url: input.photoAfterUrl ?? null,
+    },
+  })
+  return res.data ? mapEcoReport(res.data) : null
+}
+
+async function fetchEcoReports(): Promise<EcoReport[]> {
+  if (!hasBackend()) return ecoReports
+  try {
+    const res = await apiRequest<BackendEcoReport[]>('/eco/reports')
+    return (res.data ?? []).map(mapEcoReport)
+  } catch {
+    return ecoReports
+  }
+}
+
+async function fetchMyEcoReports(): Promise<EcoReport[]> {
+  if (!hasBackend()) return []
+  try {
+    const res = await apiRequest<BackendEcoReport[]>('/me/eco-reports')
+    return (res.data ?? []).map(mapEcoReport)
+  } catch {
+    return []
+  }
 }
 
 async function fetchRewards(): Promise<Reward[]> {
@@ -311,11 +443,15 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
 
 export const api = {
   getProfile: fetchProfile,
-  getToday: () => wait(today),
+  patchProfile,
+  getToday: fetchStats,
   getCommunityWalks: () => wait(communityWalks),
   getEvents: () => wait(events),
   getRewards: fetchRewards,
-  getEcoReports: () => wait(ecoReports),
+  getEcoReports: fetchEcoReports,
+  getMyEcoReports: fetchMyEcoReports,
+  createEcoReport,
+  uploadEcoPhoto,
   getLeaderboard: fetchLeaderboard,
   getMatches: () => wait(people),
   getSponsors: () => wait(sponsors),

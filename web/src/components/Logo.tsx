@@ -28,7 +28,7 @@ export function Logo() {
   return (
     <div className="flex items-center gap-2.5">
       <LogoMark size={36} />
-      <span className="hidden font-display text-[22px] font-bold tracking-tight text-deep sm:inline">
+      <span className="font-display text-[22px] font-bold tracking-tight text-deep">
         Sea<span className="text-sea">Steps</span>
       </span>
     </div>

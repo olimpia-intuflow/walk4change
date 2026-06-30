@@ -19,23 +19,58 @@ export function Eco() {
   const [reports, setReports] = useState<EcoReport[]>([])
   const [rewards, setRewards] = useState<Reward[]>([])
   const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [desc, setDesc] = useState('')
-  const [photoBefore, setPhotoBefore] = useState<string | null>(null)
-  const [photoAfter, setPhotoAfter] = useState<string | null>(null)
-  const [reportPhoto, setReportPhoto] = useState<string | null>(null)
+  const [category, setCategory] = useState<string | null>(null)
+  const [photoBefore, setPhotoBefore] = useState<File | null>(null)
+  const [photoAfter, setPhotoAfter] = useState<File | null>(null)
+  const [reportPhoto, setReportPhoto] = useState<File | null>(null)
+
+  const loadReports = () => { api.getEcoReports().then(setReports).catch(() => {}) }
 
   useEffect(() => {
-    api.getEcoReports().then(setReports)
+    loadReports()
     api.getRewards().then(setRewards)
   }, [])
 
   const switchTab = (t: Tab) => {
     setTab(t)
     setSent(false)
+    setError(null)
     setDesc('')
+    setCategory(null)
     setPhotoBefore(null)
     setPhotoAfter(null)
     setReportPhoto(null)
+  }
+
+  const submit = async () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      // Photos go straight to Supabase Storage; only their URLs hit the API.
+      const [pUrl, pBefore, pAfter] = await Promise.all([
+        reportPhoto ? api.uploadEcoPhoto(reportPhoto) : Promise.resolve(null),
+        photoBefore ? api.uploadEcoPhoto(photoBefore) : Promise.resolve(null),
+        photoAfter ? api.uploadEcoPhoto(photoAfter) : Promise.resolve(null),
+      ])
+      await api.createEcoReport({
+        kind: tab === 'report' ? 'report' : 'cleanup',
+        category: category ?? '',
+        description: desc,
+        photoUrl: pUrl,
+        photoBeforeUrl: pBefore,
+        photoAfterUrl: pAfter,
+      })
+      loadReports()
+      setSent(true)
+    } catch {
+      setError('Nie udało się wysłać. Spróbuj ponownie.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -93,9 +128,9 @@ export function Eco() {
               <h2 className="font-display text-lg font-bold text-ink">Zgłoś problem</h2>
               <div className="flex flex-wrap gap-2">
                 {['Śmieci', 'Rozlewisko', 'Dzikie wysypisko', 'Inne'].map((t) => (
-                  <Pill key={t} tone="muted">
-                    {t}
-                  </Pill>
+                  <button key={t} type="button" onClick={() => setCategory(t)}>
+                    <Pill tone={category === t ? 'sea' : 'muted'}>{t}</Pill>
+                  </button>
                 ))}
               </div>
               <textarea
@@ -106,11 +141,12 @@ export function Eco() {
                 className="w-full resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-ink outline-none placeholder:text-muted/70 focus:ring-2 focus:ring-sea/30"
               />
               <div className="grid grid-cols-2 gap-2.5">
-                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie" onFile={setReportPhoto} preview={reportPhoto} />
+                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie" onFile={setReportPhoto} />
                 <UploadBtn icon={<MapPin size={18} />} label="Lokalizacja" />
               </div>
-              <PrimaryButton onClick={() => setSent(true)} className="w-full">
-                <PaperPlaneTilt size={18} /> Wyślij zgłoszenie
+              {error && <p className="text-sm font-semibold text-rose-600">{error}</p>}
+              <PrimaryButton onClick={submit} disabled={busy} className="w-full">
+                <PaperPlaneTilt size={18} /> {busy ? 'Wysyłam…' : 'Wyślij zgłoszenie'}
               </PrimaryButton>
             </div>
           ) : (
@@ -119,9 +155,9 @@ export function Eco() {
               <p className="-mt-1 text-sm text-muted">Coś ogarnęłaś sama? Pokaż efekt i zgarnij punkty.</p>
               <div className="flex flex-wrap gap-2">
                 {['Plaża', 'Park', 'Las', 'Ulica', 'Brzeg'].map((t) => (
-                  <Pill key={t} tone="leaf">
-                    {t}
-                  </Pill>
+                  <button key={t} type="button" onClick={() => setCategory(t)}>
+                    <Pill tone={category === t ? 'sea' : 'leaf'}>{t}</Pill>
+                  </button>
                 ))}
               </div>
               <textarea
@@ -132,11 +168,12 @@ export function Eco() {
                 className="w-full resize-none rounded-2xl border border-white/70 bg-white/70 px-4 py-3 text-sm text-ink outline-none placeholder:text-muted/70 focus:ring-2 focus:ring-leaf/30"
               />
               <div className="grid grid-cols-2 gap-2.5">
-                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PRZED" tone="leaf" onFile={setPhotoBefore} preview={photoBefore} />
-                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PO" tone="leaf" onFile={setPhotoAfter} preview={photoAfter} />
+                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PRZED" tone="leaf" onFile={setPhotoBefore} />
+                <UploadBtn icon={<Camera size={18} />} label="Zdjęcie PO" tone="leaf" onFile={setPhotoAfter} />
               </div>
-              <PrimaryButton onClick={() => setSent(true)} className="w-full bg-gradient-to-br from-leaf to-sea">
-                <Sparkle size={18} /> Pochwal się
+              {error && <p className="text-sm font-semibold text-rose-600">{error}</p>}
+              <PrimaryButton onClick={submit} disabled={busy} className="w-full bg-gradient-to-br from-leaf to-sea">
+                <Sparkle size={18} /> {busy ? 'Wysyłam…' : 'Pochwal się'}
               </PrimaryButton>
             </div>
           )}
@@ -146,18 +183,28 @@ export function Eco() {
         <div>
           <h2 className="mb-2 font-display text-lg font-bold text-ink">Ostatnia aktywność</h2>
           <div className="space-y-2.5">
-            {reports.map((r) => (
-              <Card key={r.id} className="flex items-center gap-3 p-3.5">
-                <div className="grid h-10 w-10 place-items-center rounded-xl bg-sea/10 text-sea">
-                  {r.status === 'cleaned' ? <Sparkle size={18} /> : <Leaf size={18} />}
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-bold text-ink">{r.type}</div>
-                  <div className="text-xs text-muted">{r.location}</div>
-                </div>
-                <Pill tone={statusMeta[r.status].tone}>{statusMeta[r.status].label}</Pill>
-              </Card>
-            ))}
+            {reports.length === 0 && (
+              <p className="text-sm text-muted">Brak zgłoszeń jeszcze — bądź pierwsza!</p>
+            )}
+            {reports.map((r) => {
+              const thumb = r.photoAfterUrl || r.photoUrl || r.photoBeforeUrl
+              return (
+                <Card key={r.id} className="flex items-center gap-3 p-3.5">
+                  {thumb ? (
+                    <img src={thumb} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                  ) : (
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-sea/10 text-sea">
+                      {r.status === 'cleaned' ? <Sparkle size={18} /> : <Leaf size={18} />}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-ink">{r.type}</div>
+                    <div className="truncate text-xs text-muted">{r.description || r.location}</div>
+                  </div>
+                  <Pill tone={statusMeta[r.status].tone}>{statusMeta[r.status].label}</Pill>
+                </Card>
+              )
+            })}
           </div>
         </div>
 
@@ -184,13 +231,14 @@ export function Eco() {
 }
 
 function UploadBtn({
-  icon, label, tone = 'sea', preview, onFile,
+  icon, label, tone = 'sea', onFile,
 }: {
   icon: ReactNode; label: string; tone?: 'sea' | 'leaf';
-  preview?: string | null; onFile?: (url: string) => void;
+  onFile?: (file: File) => void;
 }) {
   const border = tone === 'leaf' ? 'border-leaf/40' : 'border-sea/40'
   const ref = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<string | null>(null)
   return (
     <button
       type="button"
@@ -209,7 +257,9 @@ function UploadBtn({
         className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0]
-          if (file && onFile) onFile(URL.createObjectURL(file))
+          if (!file) return
+          setPreview(URL.createObjectURL(file))
+          onFile?.(file)
         }}
       />
     </button>

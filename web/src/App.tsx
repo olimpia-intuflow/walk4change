@@ -46,13 +46,13 @@ function App() {
     <Routes>
       {/* logowanie / zakładanie konta — pełny ekran, bez shellu */}
       <Route path="/login" element={<Login />} />
+      <Route path="/auth/magic" element={<MagicVerify />} />
 
       {/* aplikacja — wymaga zalogowania */}
       <Route element={<RequireAuth />}>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/walk" element={<Walk />} />
-        <Route path="/auth/magic" element={<MagicVerify />} />
         <Route path="/community" element={<Community />} />
         <Route path="/events" element={<Events />} />
         <Route path="/eco" element={<Eco />} />

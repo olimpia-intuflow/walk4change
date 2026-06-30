@@ -62,12 +62,25 @@ export function Home() {
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
 
   useEffect(() => {
-    api.getProfile().then(setProfile).catch(() => {})
-    api.getToday().then(setToday)
+    // Stats can change while Home stays mounted (e.g. returning from a walk),
+    // so refetch the live ones on focus / tab-visible, not only on mount.
+    const refreshStats = () => {
+      api.getToday().then(setToday).catch(() => {})
+      api.getProfile().then(setProfile).catch(() => {})
+    }
+    refreshStats()
     api.getRewards().then(setRewards)
     api.getTeamToday().then(setTeam)
     api.getTeamRewards().then(setTeamRewards)
     api.getSponsors().then(setSponsors)
+
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshStats() }
+    window.addEventListener('focus', refreshStats)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', refreshStats)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   const isTeam = mode === 'team'

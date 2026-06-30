@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { DownloadSimple, X, Export } from '@phosphor-icons/react'
+import { DownloadSimple, X, Export, DotsThreeVertical } from '@phosphor-icons/react'
 import { LogoMark } from './Logo'
 
-const DISMISS_KEY = 'ss-install-dismissed'
+const DISMISS_KEY = 'ss-install-dismissed-v2'
 
 // Capture beforeinstallprompt at module load — before React mounts — so we never miss it
 let _earlyPip: any = null
@@ -21,8 +21,18 @@ function isStandalone() {
 function isIOS() {
   return /iphone|ipad|ipod/i.test(navigator.userAgent)
 }
+/** True only for real Safari on iOS — the ONLY iOS browser that can install a PWA. */
+function isIOSSafari() {
+  const ua = navigator.userAgent
+  return (
+    isIOS() &&
+    /safari/i.test(ua) &&
+    // Chrome (CriOS), Firefox (FxiOS), Edge (EdgiOS), Google app (GSA) → not Safari
+    !/crios|fxios|edgios|gsa|fban|fbav|instagram|line/i.test(ua)
+  )
+}
 
-/** Małe, nienachalne okienko instalacji w rogu — pojawia się po interakcji + chwili. */
+/** Małe, nienachalne okienko instalacji w rogu — pojawia się zawsze (poza trybem standalone). */
 export function InstallModal() {
   const [open, setOpen] = useState(false)
   const [deferred, setDeferred] = useState<any>(null)
@@ -32,37 +42,30 @@ export function InstallModal() {
     if (isStandalone()) return
     if (localStorage.getItem(DISMISS_KEY) === '1') return
 
-    // Use early-captured event if we already have one
-    if (_earlyPip) {
-      setDeferred(_earlyPip)
-      _earlyPip = null
-    }
-
-    const onPrompt = (e: any) => {
+    const capture = (e: any) => {
       e.preventDefault()
       setDeferred(e)
+      setOpen(true)
     }
-    window.addEventListener('beforeinstallprompt', onPrompt)
+
+    // pick up any event captured before React mounted
+    if (_earlyPip) {
+      capture(_earlyPip)
+      _earlyPip = null
+    } else {
+      window.addEventListener('beforeinstallprompt', capture)
+    }
+
     window.addEventListener('appinstalled', () => setOpen(false))
 
-    // pokaż dopiero ~6 s PO pierwszej interakcji (scroll/klik), nie od razu
-    let timer: number | undefined
-    let used = false
-    const arm = () => {
-      if (used) return
-      used = true
-      timer = window.setTimeout(() => setOpen(true), 6000)
-    }
-    window.addEventListener('scroll', arm, { once: true, passive: true })
-    window.addEventListener('pointerdown', arm, { once: true })
-    window.addEventListener('keydown', arm, { once: true })
+    // Fallback: even WITHOUT a native prompt (iOS, Firefox, or Chrome that
+    // already swallowed beforeinstallprompt), show the card after a short delay
+    // so there is always a visible install affordance with instructions.
+    const fallback = window.setTimeout(() => setOpen(true), 3500)
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', onPrompt)
-      window.removeEventListener('scroll', arm)
-      window.removeEventListener('pointerdown', arm)
-      window.removeEventListener('keydown', arm)
-      if (timer) window.clearTimeout(timer)
+      window.removeEventListener('beforeinstallprompt', capture)
+      window.clearTimeout(fallback)
     }
   }, [])
 
@@ -103,20 +106,34 @@ export function InstallModal() {
             </div>
           </div>
 
-          {ios ? (
-            <p className="mt-3 rounded-2xl bg-sea/8 px-3 py-2 text-xs font-semibold text-deep">
-              Dotknij <Export size={14} weight="fill" className="inline align-text-bottom text-sea" /> <b>Udostępnij</b> → <b>„Do ekranu początkowego"</b>
-            </p>
-          ) : deferred ? (
+          {deferred ? (
+            // Native install prompt available (Chrome/Edge/Android) → one tap.
             <button
               onClick={install}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-sea to-deep py-2.5 text-sm font-bold text-white transition active:scale-95"
             >
               <DownloadSimple size={16} weight="fill" /> Zainstaluj
             </button>
-          ) : (
+          ) : ios && !isIOSSafari() ? (
+            // iOS but NOT Safari (Chrome/Google app/in-app) — install is impossible
+            // here; only Safari can add to home screen. Tap to copy the URL + hint.
+            <button
+              onClick={() => { navigator.clipboard?.writeText(window.location.href).catch(() => {}) }}
+              className="mt-3 w-full rounded-2xl bg-sea/8 px-3 py-2 text-left text-xs font-semibold text-deep transition active:scale-[0.98]"
+            >
+              Na iPhonie instalacja działa tylko w <b>Safari</b>.<br />
+              Otwórz tam <b>seasteps.pl/app</b> → <Export size={14} weight="fill" className="inline align-text-bottom text-sea" /> <b>Udostępnij</b> → <b>„Do ekranu początkowego"</b>.
+              <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-sea">Dotknij, aby skopiować adres</span>
+            </button>
+          ) : ios ? (
+            // iOS Safari — no native prompt, show Share-sheet instructions.
             <p className="mt-3 rounded-2xl bg-sea/8 px-3 py-2 text-xs font-semibold text-deep">
-              W menu przeglądarki: <b>„Zainstaluj aplikację"</b>
+              Dotknij <Export size={14} weight="fill" className="inline align-text-bottom text-sea" /> <b>Udostępnij</b> → <b>„Do ekranu początkowego"</b>
+            </p>
+          ) : (
+            // Desktop/other browsers — menu instructions fallback.
+            <p className="mt-3 rounded-2xl bg-sea/8 px-3 py-2 text-xs font-semibold text-deep">
+              Otwórz menu przeglądarki <DotsThreeVertical size={14} weight="bold" className="inline align-text-bottom text-sea" /> → <b>„Zainstaluj aplikację"</b>
             </p>
           )}
         </motion.div>

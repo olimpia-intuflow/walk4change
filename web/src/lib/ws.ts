@@ -97,13 +97,14 @@ export class LiveSocket {
   }
 
   /** Wyślij ping GPS (dla realnego urządzenia / symulacji z przeglądarki). */
-  sendPing(sessionId: string, seq: number, lat: number, lng: number): void {
+  sendPing(sessionId: string, seq: number, lat: number, lng: number, accuracy?: number): void {
     this.send({
       type: 'ping',
       session_id: sessionId,
       seq,
       lat,
       lng,
+      accuracy: accuracy ?? null,
       recorded_at: new Date().toISOString(),
     })
   }
