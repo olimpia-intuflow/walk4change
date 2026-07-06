@@ -5,13 +5,19 @@ on:
     branches: [main]
     paths: ["backend/**"]
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy to Azure App Service after build+push"
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: h4cstolik3/walk4change-api
+  IMAGE_NAME: olimpia-intuflow/walk4change-api
+  AZURE_WEBAPP_NAME: if-app-walk4change-prod-pl
 
 jobs:
-  build-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,25 +54,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # GitOps deploy: bump the image tag in the Helm chart that ArgoCD watches.
-      # ArgoCD (automated sync, prune+selfHeal) rolls the new image onto k3s.
-      # Requires repo secret HELM_DEPLOY_TOKEN — a PAT with write access to the
-      # helm repo (kamilandrzejrybacki-inc/helm).
-      - name: Bump Helm image tag (triggers ArgoCD deploy)
-        env:
-          HELM_REPO: kamilandrzejrybacki-inc/helm
-          GH_TOKEN: ${{ secrets.HELM_DEPLOY_TOKEN }}
-        run: |
-          SHA_TAG=$(echo "${{ github.sha }}" | cut -c1-7)
+      # Krótki SHA do wdrożenia konkretnego, świeżo zbudowanego obrazu
+      # (nie polegamy na "latest" przy deployu, żeby uniknąć race z cache).
+      - name: Compute short SHA
+        id: sha
+        run: echo "short=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
-          rm -rf /tmp/helm
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${HELM_REPO}.git" /tmp/helm
-          cd /tmp/helm
-
-          sed -i "s|^  tag:.*|  tag: \"${SHA_TAG}\"|" charts/walk4change/values.yaml
-
-          git config user.email "ci@github.com"
-          git config user.name "GitHub Actions"
-          git add charts/walk4change/values.yaml
-          git diff --cached --quiet || git commit -m "ci(walk4change): deploy ${SHA_TAG} [skip ci]"
-          git push
+      # Deploy na Azure App Service (Web App for Containers).
+      # Zawsze przy push na main; przy ręcznym uruchomieniu tylko jeśli
+      # input "deploy" jest true (domyślnie tak) — pozwala odpalić sam
+      # build+push bez deployu (np. do testu obrazu).
+      - name: Deploy to Azure App Service
+        if: ${{ github.event_name == 'push' || inputs.deploy }}
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.sha.outputs.short }}
