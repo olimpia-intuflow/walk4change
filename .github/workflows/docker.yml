@@ -64,4 +64,6 @@ jobs:
       # input "deploy" jest true (domyślnie tak).
       - name: Trigger App Service pull
         if: ${{ github.event_name == 'push' || inputs.deploy }}
-        run: curl -fsS -X POST "${{ secrets.AZURE_CD_WEBHOOK }}"
+        env:
+          WEBHOOK: ${{ secrets.AZURE_CD_WEBHOOK }}
+        run: curl -fsS -X POST "$(printf '%s' "$WEBHOOK" | tr -d '[:space:]')"
