@@ -14,7 +14,6 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: olimpia-intuflow/walk4change-api
-  AZURE_WEBAPP_NAME: if-app-walk4change-prod-pl
 
 jobs:
   build-push-deploy:
@@ -54,20 +53,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Krótki SHA do wdrożenia konkretnego, świeżo zbudowanego obrazu
-      # (nie polegamy na "latest" przy deployu, żeby uniknąć race z cache).
-      - name: Compute short SHA
-        id: sha
-        run: echo "short=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
-
-      # Deploy na Azure App Service (Web App for Containers).
+      # Deploy przez webhook CD App Service (Continuous Deployment po stronie
+      # Azure; App Service śledzi ghcr.io/olimpia-intuflow/walk4change-api:latest
+      # i po webhooku pobiera świeży obraz + restartuje kontener).
+      # Dlatego tag :latest w kroku build+push jest kluczowy (metadata-action
+      # taguje latest na default branch + short-sha).
+      # Uwaga: azure/webapps-deploy@v3 z publish-profile NIE obsługuje aplikacji
+      # kontenerowych ("Failed to get app runtime OS") — stąd webhook.
       # Zawsze przy push na main; przy ręcznym uruchomieniu tylko jeśli
-      # input "deploy" jest true (domyślnie tak) — pozwala odpalić sam
-      # build+push bez deployu (np. do testu obrazu).
-      - name: Deploy to Azure App Service
+      # input "deploy" jest true (domyślnie tak).
+      - name: Trigger App Service pull
         if: ${{ github.event_name == 'push' || inputs.deploy }}
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.sha.outputs.short }}
+        run: curl -fsS -X POST "${{ secrets.AZURE_CD_WEBHOOK }}"
