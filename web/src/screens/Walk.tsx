@@ -9,6 +9,7 @@ import { apiRequest, hasBackend, getToken } from '../lib/http'
 import { login, register, currentUserId, requestMagicLink } from '../lib/auth'
 import { LiveSocket, type ScoredPing, type LeaderRow } from '../lib/ws'
 import { useStepCounter } from '../hooks/useStepCounter'
+import { addWalk } from '../lib/walks'
 
 const COLORS = ['#0f8b8d', '#e26d5c', '#7b6cf0', '#f2a541', '#58b86c']
 
@@ -229,7 +230,25 @@ export function Walk() {
     const mine = me()
     const nat = mine?.nature ?? 1
     const tog = mine?.together ?? 1
-    setSummary({ points: Math.round(steps * nat * tog), meters: mine?.meters ?? 0, steps, together: tog > 1, nature: nat > 1 })
+    const finalPoints = Math.round(mine?.points ?? 0)
+    setSummary({ points: finalPoints, meters: mine?.meters ?? 0, steps, together: tog > 1, nature: nat > 1 })
+    if (sessionId) {
+      const now = new Date()
+      const hh = String(now.getHours()).padStart(2, '0')
+      const mm = String(now.getMinutes()).padStart(2, '0')
+      addWalk({
+        id: sessionId || `w-${Date.now()}`,
+        dateLabel: `Dziś • ${hh}:${mm}`,
+        durationSec: sec,
+        steps,
+        points: finalPoints,
+        withSomeone: walkers.length > 1,
+        inNature: nat > 1,
+        place: 'Spacer GPS',
+        routeSeed: Math.abs(Math.round((mine?.meters ?? 0) * 1000)) || Date.now() % 100000,
+        photos: [],
+      })
+    }
     stopStreaming()
     try { await apiRequest(`/walks/${sessionId}/stop`, { method: 'POST' }) } catch { /* non-host */ }
     try { await apiRequest(`/walks/${sessionId}/leave`, { method: 'POST' }) } catch { /* ignore */ }
@@ -248,7 +267,7 @@ export function Walk() {
 
   const mine = me()
   const combined = walkers.reduce((m, w) => Math.max(m, w.together * w.nature), 0)
-  const displayPoints = Math.round(steps * (mine?.nature ?? 1) * (mine?.together ?? 1))
+  const displayPoints = Math.round(mine?.points ?? 0)
 
   return (
     <div>

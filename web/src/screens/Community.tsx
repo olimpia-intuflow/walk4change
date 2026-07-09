@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { MapPin, Clock, Trophy, UsersThree, Footprints, ChatCircle, Buildings, Heart } from '@phosphor-icons/react'
-import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton } from '../components/ui'
+import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton, SoonBadge, DemoBanner } from '../components/ui'
 import { Avatar } from '../components/Avatar'
 import { useMode } from '../lib/mode'
 import { getInterests } from '../lib/interests'
-import { getGender } from '../lib/settings'
 import { api, type CommunityWalk, type LeaderboardRow, type TeamRow, type MatchPerson } from '../lib/api'
 
 export function Community() {
@@ -15,10 +14,7 @@ export function Community() {
   const [board, setBoard] = useState<LeaderboardRow[]>([])
   const [teamBoard, setTeamBoard] = useState<TeamRow[]>([])
   const [matches, setMatches] = useState<MatchPerson[]>([])
-  const [joined, setJoined] = useState<Record<string, boolean>>({})
-  const [invited, setInvited] = useState<Record<string, 'walk' | 'chat' | undefined>>({})
   const myInterests = getInterests()
-  const gender = getGender()
 
   useEffect(() => {
     api.getCommunityWalks().then(setWalks)
@@ -36,6 +32,10 @@ export function Community() {
       />
 
       <div className="space-y-4 px-5 pt-2">
+        <DemoBanner>
+          Poznawanie ludzi i wspólne spacery — w przygotowaniu. Poniżej przykładowe dopasowania.
+        </DemoBanner>
+
         {/* ── Dopasowani do Ciebie (tylko solo) ── */}
         {!isTeam && (
           <section>
@@ -45,7 +45,6 @@ export function Community() {
             <div className="space-y-3">
               {matches.map((m, i) => {
                 const shared = m.interests.filter((t) => myInterests.includes(t))
-                const inv = invited[m.id]
                 return (
                   <motion.div key={m.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
                     <Card className="p-4">
@@ -60,6 +59,7 @@ export function Community() {
                           </div>
                           <p className="text-xs text-muted">{m.bio}</p>
                         </div>
+                        <SoonBadge />
                       </div>
 
                       {shared.length > 0 && (
@@ -74,17 +74,11 @@ export function Community() {
                       )}
 
                       <div className="mt-3 grid grid-cols-2 gap-2.5">
-                        <SoftButton
-                          onClick={() => setInvited((v) => ({ ...v, [m.id]: inv === 'chat' ? undefined : 'chat' }))}
-                          className="py-2.5 text-sm"
-                        >
-                          <ChatCircle size={16} /> {inv === 'chat' ? 'Wysłano' : 'Rozmowa'}
+                        <SoftButton disabled className="py-2.5 text-sm">
+                          <ChatCircle size={16} /> Wkrótce
                         </SoftButton>
-                        <PrimaryButton
-                          onClick={() => setInvited((v) => ({ ...v, [m.id]: inv === 'walk' ? undefined : 'walk' }))}
-                          className="py-2.5 text-sm"
-                        >
-                          <Footprints size={16} /> {inv === 'walk' ? `✓ Zaproszon${gender === 'm' ? 'y' : 'a'}` : 'Umów spacer'}
+                        <PrimaryButton disabled className="py-2.5 text-sm">
+                          <Footprints size={16} /> Wkrótce
                         </PrimaryButton>
                       </div>
                     </Card>
@@ -115,14 +109,15 @@ export function Community() {
                         </span>
                       </div>
                     </div>
+                    <SoonBadge />
                   </div>
                   <p className="mt-2.5 text-sm text-muted">„{w.vibe}"</p>
                   <div className="mt-3 grid grid-cols-2 gap-2.5">
-                    <SoftButton onClick={() => {}} className="py-2.5 text-sm">
-                      Zaproś
+                    <SoftButton disabled className="py-2.5 text-sm">
+                      Wkrótce
                     </SoftButton>
-                    <PrimaryButton onClick={() => setJoined((j) => ({ ...j, [w.id]: !j[w.id] }))} className="py-2.5 text-sm">
-                      {joined[w.id] ? '✓ Idę!' : 'Dołączam'}
+                    <PrimaryButton disabled className="py-2.5 text-sm">
+                      Wkrótce
                     </PrimaryButton>
                   </div>
                 </Card>

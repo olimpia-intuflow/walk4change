@@ -130,18 +130,35 @@ export function SoftButton({
   children,
   onClick,
   className = '',
+  disabled = false,
 }: {
   children: ReactNode
   onClick?: () => void
   className?: string
+  disabled?: boolean
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-5 py-3.5 text-[15px] font-bold text-deep transition active:scale-[0.97] ${className}`}
+      disabled={disabled}
+      className={`inline-flex items-center justify-center gap-2 rounded-2xl border border-white/70 bg-white/80 px-5 py-3.5 text-[15px] font-bold text-deep transition active:scale-[0.97] disabled:opacity-60 ${className}`}
     >
       {children}
     </button>
+  )
+}
+
+// Tag for individual cards that preview a feature not live yet.
+export function SoonBadge() {
+  return <Pill tone="sand">Wkrótce</Pill>
+}
+
+// Soft info banner shown at the top of a demo/preview section.
+export function DemoBanner({ children }: { children: ReactNode }) {
+  return (
+    <Card className="bg-gradient-to-br from-sand/20 to-sea/10 p-4">
+      <p className="text-sm font-semibold leading-snug text-deep">{children}</p>
+    </Card>
   )
 }

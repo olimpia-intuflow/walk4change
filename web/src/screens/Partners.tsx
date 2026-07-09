@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { Storefront, MapPin, Ticket, HandHeart } from '@phosphor-icons/react'
-import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton } from '../components/ui'
+import { ScreenHeader, Card, Pill, PrimaryButton, SoonBadge, DemoBanner } from '../components/ui'
 import { SponsorIcon } from '../components/SponsorIcon'
 import { api, type Sponsor } from '../lib/api'
 
 export function Partners() {
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
-  const [claimed, setClaimed] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     api.getSponsors().then(setSponsors)
@@ -22,6 +21,11 @@ export function Partners() {
       />
 
       <div className="space-y-4 px-5 pt-2">
+        <DemoBanner>
+          Program partnerski w przygotowaniu. Tu lokalne firmy — kawiarnie, wypożyczalnie — będą nagradzać
+          spacerowiczów. Poniżej przykłady, jak to będzie wyglądać. Chcesz być partnerem? Napisz do nas.
+        </DemoBanner>
+
         <Card className="bg-gradient-to-br from-sea/10 to-leaf/10 p-4">
           <p className="text-sm font-semibold leading-snug text-deep">
             🌿 Każda wymiana wspiera lokalny biznes i wyciąga Cię na świeże powietrze — kajak, SUP, rower, rejs.
@@ -43,6 +47,7 @@ export function Partners() {
                       <MapPin size={12} /> {s.place}
                     </div>
                   </div>
+                  <SoonBadge />
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <Pill tone="leaf">
@@ -50,11 +55,8 @@ export function Partners() {
                   </Pill>
                   <span className="text-xs font-bold text-deep">{s.pointsCost} pkt</span>
                 </div>
-                <PrimaryButton
-                  onClick={() => setClaimed((c) => ({ ...c, [s.id]: !c[s.id] }))}
-                  className="mt-3 w-full py-2.5 text-sm"
-                >
-                  {claimed[s.id] ? '✓ Odebrano — pokaż w lokalu' : 'Odbierz ofertę'}
+                <PrimaryButton disabled className="mt-3 w-full py-2.5 text-sm">
+                  Wkrótce
                 </PrimaryButton>
               </Card>
             </motion.div>
@@ -69,10 +71,8 @@ export function Partners() {
           <h2 className="font-display text-lg font-bold text-ink">Masz lokalny biznes?</h2>
           <p className="mx-auto mt-1 max-w-[280px] text-sm text-muted">
             Zostań partnerem SeaSteps — docieraj do aktywnych ludzi nad Bałtykiem i wspieraj zdrowy, eko styl życia.
+            Napisz do nas, chętnie pogadamy.
           </p>
-          <SoftButton onClick={() => {}} className="mt-3 w-full">
-            Zostań partnerem
-          </SoftButton>
         </Card>
       </div>
     </div>

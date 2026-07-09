@@ -15,6 +15,8 @@ export const API_BASE: string = (import.meta.env.VITE_API_BASE ?? '').replace(/\
 
 const API_PREFIX = '/api/v1'
 const TOKEN_KEY = 'ss-token'
+/** Po tylu ms bez odpowiedzi przerywamy zapytanie (backend zawieszony/martwy). */
+const REQUEST_TIMEOUT_MS = 15_000
 
 /** Czy frontend ma podpięty realny backend. */
 export function hasBackend(): boolean {
@@ -79,15 +81,24 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     if (token) headers.Authorization = `Bearer ${token}`
   }
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+
   let res: Response
   try {
     res = await fetch(`${API_BASE}${API_PREFIX}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
     })
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError('Nie udało się połączyć z serwerem.', 'TIMEOUT', 0)
+    }
     throw new ApiError('Nie udało się połączyć z serwerem.', 'NETWORK', 0)
+  } finally {
+    clearTimeout(timeoutId)
   }
 
   if (res.status === 204) return {}

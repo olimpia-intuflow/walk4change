@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Envelope, Lock, ArrowRight, Footprints, Leaf, UsersThree, Warning } from '@phosphor-icons/react'
 import { Logo } from '../components/Logo'
 import { FootstepTrail } from '../components/Footsteps'
-import { login, register } from '../lib/auth'
+import { login, register, requestMagicLink } from '../lib/auth'
 
 type Tab = 'login' | 'signup'
 
@@ -15,9 +15,11 @@ export function Login() {
   const [pass2, setPass2] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [magicMsg, setMagicMsg] = useState<string | null>(null)
 
   const submit = async () => {
     setError(null)
+    setMagicMsg(null)
     if (!email || !pass) { setError('Podaj e-mail i hasło.'); return }
     if (tab === 'signup' && pass !== pass2) { setError('Hasła się nie zgadzają.'); return }
     setLoading(true)
@@ -30,6 +32,22 @@ export function Login() {
       nav('/')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Błąd logowania.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const sendMagicLink = async () => {
+    if (loading) return
+    if (!email.includes('@')) { setError('Podaj e-mail, aby wysłać magiczny link.'); return }
+    setError(null)
+    setMagicMsg(null)
+    setLoading(true)
+    try {
+      await requestMagicLink(email)
+      setMagicMsg(`✓ Sprawdź skrzynkę — magiczny link poszedł na ${email.trim()}.`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Nie udało się wysłać magicznego linku.')
     } finally {
       setLoading(false)
     }
@@ -67,13 +85,13 @@ export function Login() {
           {/* zakładki */}
           <div className="mb-6 inline-flex w-full rounded-2xl bg-sea/8 p-1 text-sm font-bold">
             <button
-              onClick={() => { setTab('login'); setError(null) }}
+              onClick={() => { setTab('login'); setError(null); setMagicMsg(null) }}
               className={`flex-1 rounded-xl py-2.5 transition ${tab === 'login' ? 'bg-white text-deep shadow' : 'text-muted'}`}
             >
               Zaloguj się
             </button>
             <button
-              onClick={() => { setTab('signup'); setError(null) }}
+              onClick={() => { setTab('signup'); setError(null); setMagicMsg(null) }}
               className={`flex-1 rounded-xl py-2.5 transition ${tab === 'signup' ? 'bg-white text-deep shadow' : 'text-muted'}`}
             >
               Załóż konto
@@ -122,6 +140,15 @@ export function Login() {
           >
             {loading ? 'Chwilka…' : tab === 'login' ? 'Zaloguj się' : 'Załóż konto'} {!loading && <ArrowRight size={18} />}
           </button>
+
+          <button
+            onClick={sendMagicLink}
+            disabled={loading}
+            className="mt-3 w-full text-center text-sm font-bold text-sea disabled:opacity-60"
+          >
+            albo wyślij magiczny link →
+          </button>
+          {magicMsg && <p className="mt-2 text-center text-sm font-semibold text-[#2f7a45]">{magicMsg}</p>}
         </div>
       </div>
     </div>

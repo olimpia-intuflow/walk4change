@@ -281,18 +281,40 @@ function mapProfile(p: BackendProfile): Profile {
     // backend trzyma URL/null; UI używa emoji — fallback gdy brak URL-a
     avatar: p.avatar_url ?? '🌊',
     interests: p.interests ?? [],
+    // /me nie zwraca liczników ani odznak — wypełnia je wołający
+    // (Profile.tsx) przez getProfileCounters() + getMyEcoReports().
     stats: { walks: 0, events: 0, ecoReports: 0 },
     badges: [],
   }
 }
 
-function mapReward(r: BackendReward): Reward {
+/**
+ * Ikona nagrody na podstawie backendowego `type` (discount/eco/sponsor).
+ * `eco` pokrywa i sadzenie drzew, i adopcję fok — rozróżniamy po tytule/opisie.
+ * Nieznany typ => 'voucher'.
+ */
+function iconKeyForReward(r: BackendReward): string {
+  const text = `${r.title} ${r.description ?? ''}`.toLowerCase()
+  switch (r.type) {
+    case 'eco':
+      return text.includes('seal') || text.includes('foka') ? 'seal' : 'tree'
+    case 'discount':
+    case 'sponsor':
+      return 'voucher'
+    default:
+      return 'voucher'
+  }
+}
+
+function mapReward(r: BackendReward, totalPoints: number): Reward {
+  const cost = parseFloat(r.cost_points)
+  const progress = cost > 0 ? Math.min(100, Math.max(0, Math.round((totalPoints / cost) * 100))) : 0
   return {
     id: r.id,
     title: r.title,
     kind: r.partner_name ?? r.type,
-    iconKey: 'voucher',
-    progress: 0,
+    iconKey: iconKeyForReward(r),
+    progress,
   }
 }
 
@@ -323,8 +345,13 @@ async function fetchProfile(): Promise<Profile> {
   return mapProfile(p)
 }
 
-async function patchProfile(display_name: string): Promise<Profile> {
-  const res = await apiRequest<BackendProfile>('/me', { method: 'PATCH', body: { display_name } })
+export interface PatchProfileInput {
+  display_name?: string
+  interests?: string[]
+}
+
+async function patchProfile(input: PatchProfileInput): Promise<Profile> {
+  const res = await apiRequest<BackendProfile>('/me', { method: 'PATCH', body: input })
   const p = res.data
   if (!p) throw new Error('Brak danych profilu')
   return mapProfile(p)
@@ -341,6 +368,26 @@ async function fetchStats(): Promise<TodayStats> {
     rewardProgress: Math.min(100, Math.round(parseFloat(s.total_points) / 10)),
     natureBonusActive: false,
     togetherBonusActive: false,
+  }
+}
+
+export interface ProfileCounters {
+  totalWalks: number
+  streakDays: number
+}
+
+/**
+ * Liczniki profilu (spacery, seria dni) z GET /me/stats — używane przez
+ * Profile.tsx do realnych statystyk i odznak. Best-effort: przy błędzie
+ * zwraca zera zamiast rzucać, żeby ekran profilu wciąż się wyrenderował.
+ */
+async function fetchProfileCounters(): Promise<ProfileCounters> {
+  try {
+    const res = await apiRequest<BackendStats>('/me/stats')
+    const s = res.data
+    return { totalWalks: s?.total_walks ?? 0, streakDays: s?.streak_days ?? 0 }
+  } catch {
+    return { totalWalks: 0, streakDays: 0 }
   }
 }
 
@@ -432,7 +479,16 @@ async function fetchMyEcoReports(): Promise<EcoReport[]> {
 
 async function fetchRewards(): Promise<Reward[]> {
   const res = await apiRequest<BackendReward[]>('/rewards')
-  return (res.data ?? []).map(mapReward)
+  // Postęp = ile % kosztu nagrody user już uzbierał. Best-effort: gdy /me/stats
+  // nie odpowie, liczymy z 0 pkt zamiast wywalać cały ekran nagród.
+  let totalPoints = 0
+  try {
+    const statsRes = await apiRequest<BackendStats>('/me/stats')
+    totalPoints = statsRes.data ? parseFloat(statsRes.data.total_points) : 0
+  } catch {
+    totalPoints = 0
+  }
+  return (res.data ?? []).map((r) => mapReward(r, totalPoints))
 }
 
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
@@ -444,6 +500,7 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
 export const api = {
   getProfile: fetchProfile,
   patchProfile,
+  getProfileCounters: fetchProfileCounters,
   getToday: fetchStats,
   getCommunityWalks: () => wait(communityWalks),
   getEvents: () => wait(events),

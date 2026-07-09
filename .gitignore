@@ -3,3 +3,8 @@
 .claude/
 .vercel
 site/
+
+# sekrety środowiskowe (przykłady .env.example zostają w repo)
+.env
+.env.local
+.env.*.local

@@ -1,9 +1,15 @@
 # SeaSteps (walk4change) — dokumentacja przekazania
 
 Kompletny opis działania aplikacji: frontend, backend, baza danych, wdrożenia i
-lokalne uruchomienie. Sekrety (hasła, klucze, dane serwera domowego) **nie** są
-tu zawarte — trzymaj je w `backend/deploy/.env.homelab` (gitignored) i w panelu
-Vercel.
+lokalne uruchomienie. Sekrety (hasła, klucze) **nie** są tu zawarte — żyją w
+konfiguracji Azure App Service (backend), env projektu Vercel (frontend) i w
+prywatnym sejfie właścicielki. Nigdy w repo ani w czacie.
+
+> **Zaktualizowano 2026-07-09.** Infrastruktura z czasów hackathonu (homelab
+> Kamila, Cloudflare Tunnel, k3s/ArgoCD, stary projekt Supabase
+> `vjsjxdqnmhyrglsfqvvp`) już NIE istnieje operacyjnie — przejęcie 06–07.07.2026.
+> Wszystko działa na kontach Olimpii: Azure (backend), Vercel (frontend),
+> Supabase `plncauubrwbfbavcejgs`.
 
 ---
 
@@ -13,31 +19,36 @@ Vercel.
   Przeglądarka (PWA)
         │  HTTPS
         ▼
-  seasteps.pl  ─────────────────►  Vercel (statyczny frontend)
-        │                            • landing  /
-        │                            • aplikacja /app/  (React + Vite)
+  seasteps.pl (+ www → apex) ────►  Vercel (statyczny frontend)
+        │                             projekt `seasteps-app`, konto olimpia-intuflow
+        │                             • landing  /
+        │                             • aplikacja /app/  (React + Vite)
         │
         │  REST + WebSocket (HTTPS/WSS)
         ▼
-  walk4change.<domena>
-        │  Cloudflare Tunnel
+  Azure App Service (Linux B1, kontener)
+  if-app-walk4change-prod-pl  •  RG if-rg-walk4change-prod-pl
+  1 instancja NA SZTYWNO (hub WS w pamięci — NIE skalować)
+        │
         ▼
-  Caddy (edge) ──► Traefik (IngressRoute) ──► Backend (Rust/Axum) w k3s :8080
-        │                                            │  pojedynczy Pod
-        │                                            ▼
-        └──────────────►  Supabase  ◄────────  PostgreSQL (PostGIS)
-                          • Auth (magic-link)        + Storage (zdjęcia eko)
+  Supabase `plncauubrwbfbavcejgs` (org SeaSteps, konto admin@seasteps.pl)
+  • PostgreSQL + PostGIS (session pooler)
+  • Auth (magic-link OTP)
+  • Storage (bucket eco-photos — zdjęcia eko)
 ```
 
 Trzy niezależne elementy:
 
-1. **Frontend** — React/Vite PWA, hostowany na Vercel (`seasteps.pl`).
-2. **Backend** — Rust/Axum REST + WebSocket, uruchomiony w **Kubernetes (k3s)**,
-   wdrażany przez **ArgoCD** (GitOps); ruch: Cloudflare → Caddy → Traefik → Pod.
+1. **Frontend** — React/Vite PWA, Vercel projekt `seasteps-app` → `seasteps.pl`.
+2. **Backend** — Rust/Axum REST + WebSocket, kontener na **Azure App Service**
+   (`https://if-app-walk4change-prod-pl.azurewebsites.net`, health `/api/v1/health`).
 3. **Supabase** — PostgreSQL (z PostGIS), Auth (magic-link) i Storage (zdjęcia).
+   RLS włączone deny-all na tabelach public (audyt 08.07.2026) — backend łączy się
+   jako `postgres` i je omija; Data API nie wystawia tych tabel.
 
-Frontend i backend są w jednym repo: `h4cstolik3/walk4change`. Manifesty k8s
-(Helm) są w osobnym repo: `kamilandrzejrybacki-inc/helm`, `charts/walk4change`.
+Frontend i backend są w jednym repo: **`olimpiagozdziewicz/walk4change`**
+(transfer z `h4cstolik3` 07.07.2026; konto przemianowane z `olimpia-intuflow`
+09.07.2026 — stare URL-e redirectują). Manifesty k8s/Helm Kamila — nieużywane.
 
 ---
 
@@ -64,7 +75,7 @@ backend/
 ├── migrations/           # migracje SQL (auto-aplikowane przy starcie)
 ├── Dockerfile
 ├── Makefile              # cele lokalne: demo, up, down, seed, logs
-└── deploy/homelab.sh     # skrypt wdrożeniowy (Docker + Cloudflare Tunnel)
+└── deploy/homelab.sh     # LEGACY (stary homelab) — prod = Azure, patrz §6
 ```
 
 ### 2.2 Główne endpointy REST (`/api/v1`)
@@ -146,7 +157,7 @@ Serwer punktuje ping i rozsyła `PingScored` do wszystkich w sesji.
 
 ### 2.7 Zmienne środowiskowe backendu (nazwy, bez wartości)
 
-W `backend/deploy/.env.homelab` (gitignored):
+W Azure App Service → Configuration (wartości w sejfie właścicielki):
 
 | Zmienna | Opis |
 |---|---|
@@ -222,12 +233,22 @@ Wstrzykiwane przy buildzie (Vite). Brak `VITE_API_BASE` = tryb mock.
 
 ## 4. Supabase
 
-- **PostgreSQL** — główna baza backendu (przez session pooler).
+- **Projekt: `plncauubrwbfbavcejgs`** (org SeaSteps, konto admin@seasteps.pl,
+  eu-west-1, Free) — zmigrowany 07.07.2026 ze starego `vjsjxdqnmhyrglsfqvvp`
+  (konto hackathonowe bez dostępu; stary projekt = zamrożony backup, nie ruszać).
+- **PostgreSQL** — główna baza backendu (przez **session pooler**, port 5432).
 - **Auth** — magic-link / OTP (frontend używa `supabase-js` tylko do tego;
-  potem wymiana na JWT aplikacji).
-- **Storage** — bucket **`eco-photos`** (publiczny). Zdjęcia eko ładowane są
-  **bezpośrednio z przeglądarki** do Storage (API ma limit body 64 KiB, więc
-  zdjęcia nie przechodzą przez backend — w bazie trzymamy tylko URL-e).
+  potem wymiana na JWT aplikacji). site_url `https://seasteps.pl`; redirecty:
+  `seasteps.pl/app/auth/magic` + `seasteps-app.vercel.app/app/auth/magic`.
+  Wbudowany mailer ma limit ~3–4/h — docelowo SMTP Brevo (domena seasteps.pl
+  autoryzowana, nadawca `noreply@seasteps.pl` zweryfikowany 08.07; zostało:
+  env SMTP na Azure + feature `email_verified`).
+- **Storage** — bucket **`eco-photos`** (publiczny; limit 5 MB + whitelist MIME
+  od audytu 08.07). Zdjęcia eko ładowane są **bezpośrednio z przeglądarki**
+  do Storage (API ma limit body 64 KiB, więc zdjęcia nie przechodzą przez
+  backend — w bazie trzymamy tylko URL-e).
+- **RLS** — włączone deny-all na tabelach public (audyt 08.07); backend jako
+  `postgres` bypassuje. PostgREST/Data API nie służy do tych tabel.
 
 ---
 
@@ -260,62 +281,47 @@ VITE_API_BASE=http://localhost:8080 npm run dev
 
 ## 6. Wdrożenia (deploy)
 
-### Frontend → Vercel (`seasteps.pl`)
+### Frontend → Vercel (`seasteps.pl`) — ręczny deploy
 
-Build łączy landing + aplikację w jeden katalog `site/`:
+Projekt Vercel: **`seasteps-app`** (konto olimpia-intuflow). **Brak git
+integration** — push NIE triggeruje builda; deploy odpalasz ręcznie:
 
 ```bash
-# z katalogu głównego repo, z ustawionymi zmiennymi VITE_*:
-bash scripts/build-site.sh         # buduje web/ (base=/app/) i składa site/
-vercel deploy site --prod          # wdraża na projekt "seasteps" → seasteps.pl
+# z katalogu głównego repo (CLI zlinkowane z projektem seasteps-app):
+npx vercel deploy --prod
 ```
 
-`site/` zawiera: landing `index.html` w `/`, aplikację w `/app/`,
-`privacy.html` (Polityka Prywatności) i `vercel.json` (rewrites dla SPA).
+Root `vercel.json` każe Vercelowi budować przez `scripts/build-site.sh`
+(landing `/` + apka `/app/` + `privacy.html` + rewrites SPA).
+Env build-time w projekcie Vercel (Production) — **komplet 3 przed każdym
+buildem** (lekcja z incydentu 30.06): `VITE_API_BASE` (URL Azure),
+`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
 
-### Backend → Kubernetes (k3s) przez ArgoCD — automatyczne CI/CD
-
-Backend działa w klastrze **k3s** i jest wdrażany w modelu **GitOps**. Nie
-wdrażasz go ręcznie — wystarczy wypchnąć kod na `main`:
+### Backend → Azure App Service — automatyczne CI/CD
 
 ```
 push (backend/**) → main
         │
         ▼
-GitHub Actions  (.github/workflows/docker.yml)
-   1. build obrazu Docker (backend/Dockerfile)
-   2. push do ghcr.io/h4cstolik3/walk4change-api:<short-sha>  (+ :latest)
-   3. bump tagu obrazu w  kamilandrzejrybacki-inc/helm → charts/walk4change/values.yaml
+GitHub Actions: build obrazu Docker (backend/Dockerfile)
+        → push do ghcr.io/olimpia-intuflow/walk4change-api (public)
         │
         ▼
-ArgoCD  (aplikacja "walk4change", auto-sync: prune + selfHeal)
-   wykrywa zmianę values.yaml → synchronizuje → rolling update Poda na k3s
+webhook CD (sekret repo: AZURE_CD_WEBHOOK)
+        → App Service if-app-walk4change-prod-pl ściąga :latest i restartuje
 ```
 
-Elementy:
+- Zweryfikowane e2e 07.07.2026 (build → ghcr → webhook → health + login 200).
+- ⚠️ **NIEZWERYFIKOWANE po rename konta GitHub (09.07):** namespace ghcr mógł
+  zmienić się na `olimpiagozdziewicz/` — przy następnym deployu backendu
+  sprawdzić run CI i ew. przepiąć ścieżkę obrazu w App Service.
+- App Service: Web Sockets ON, Always On ON, healthCheckPath `/api/v1/health`,
+  **1 instancja na sztywno** (hub WS w pamięci).
+- **Migracje** bazy aplikują się przy starcie kontenera (`sqlx::migrate!()`).
+- Sekrety/env backendu: App Service → Configuration (patrz §2.7).
 
-- **Obraz** — `ghcr.io/h4cstolik3/walk4change-api`, tag = krótki SHA commita.
-- **Helm chart** — repo `kamilandrzejrybacki-inc/helm`, ścieżka `charts/walk4change`
-  (Deployment, Service, PDB, Traefik IngressRoute + Middleware + WS ServersTransport,
-  Namespace). `image.tag` w `values.yaml` jest aktualizowany automatycznie przez CI.
-- **ArgoCD** — aplikacja `walk4change` (namespace docelowy `walk4change`),
-  `syncPolicy.automated` (prune + selfHeal). Po bumpie tagu sync dzieje się sam.
-- **Sekrety** (DATABASE_URL, JWT_SECRET, SMTP_USER, SMTP_PASS) — przez `SopsSecret`
-  `walk4change-secrets` (envFrom). Jawne, niewrażliwe env — w `values.yaml`.
-- **Ruch publiczny** — Cloudflare Tunnel → Caddy → Traefik IngressRoute → Pod.
-- **Migracje** bazy aplikują się przy starcie Poda (`sqlx::migrate!()`).
-- ⚠️ **`replicas: 1`** wymuszone (hub WS w pamięci).
-
-**Wymagany sekret CI** (jednorazowo): w ustawieniach repo `h4cstolik3/walk4change`
-dodaj sekret `HELM_DEPLOY_TOKEN` — PAT z prawem zapisu do repo
-`kamilandrzejrybacki-inc/helm` (krok CI klonuje je i wypycha bump tagu).
-
-Ręczny re-deploy bez zmian w kodzie: uruchom workflow `docker` przez
-`workflow_dispatch` (zakładka Actions) lub `gh workflow run docker.yml --ref main`.
-
-> Lokalny/awaryjny wariant (poza k8s): `backend/deploy/homelab.sh` uruchamia
-> backend jako pojedynczy kontener Docker na `:8080`. Używany do dev/demo, nie do
-> produkcji (produkcja = k3s + ArgoCD powyżej).
+> Lokalny/awaryjny wariant: `backend/deploy/homelab.sh` uruchamia backend jako
+> pojedynczy kontener Docker na `:8080` (legacy — stary homelab; do dev/demo).
 
 ---
 
@@ -342,6 +348,6 @@ Ręczny re-deploy bez zmian w kodzie: uruchom workflow `docker` przez
 | Baza | PostgreSQL + PostGIS (Supabase) |
 | Auth | JWT (aplikacja) + Supabase OTP (magic-link) |
 | Storage | Supabase Storage (zdjęcia eko) |
-| Hosting FE | Vercel |
-| Hosting BE | Kubernetes (k3s) + ArgoCD (GitOps); ruch Cloudflare → Caddy → Traefik |
-| CI/CD BE | GitHub Actions → ghcr → bump Helm tag → ArgoCD auto-sync |
+| Hosting FE | Vercel (projekt `seasteps-app`, konto olimpia-intuflow) |
+| Hosting BE | Azure App Service Linux B1 (kontener, 1 instancja) |
+| CI/CD BE | GitHub Actions → ghcr → webhook CD → App Service pull `:latest` |

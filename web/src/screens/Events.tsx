@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
 import { MapPin, CalendarDots, UsersThree, CalendarHeart } from '@phosphor-icons/react'
-import { ScreenHeader, Card, Pill, PrimaryButton } from '../components/ui'
+import { ScreenHeader, Card, Pill, PrimaryButton, SoonBadge, DemoBanner } from '../components/ui'
 import { useMode } from '../lib/mode'
-import { getGender } from '../lib/settings'
 import { api, type EventItem, type EventType } from '../lib/api'
 
 const typeMeta: Record<EventType, { emoji: string; label: string; tone: 'sea' | 'leaf' | 'sand' }> = {
@@ -16,9 +15,7 @@ const typeMeta: Record<EventType, { emoji: string; label: string; tone: 'sea' | 
 export function Events() {
   const { mode } = useMode()
   const isTeam = mode === 'team'
-  const gender = getGender()
   const [events, setEvents] = useState<EventItem[]>([])
-  const [joined, setJoined] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     ;(isTeam ? api.getCorporateEvents() : api.getEvents()).then(setEvents)
@@ -33,6 +30,10 @@ export function Events() {
       />
 
       <div className="space-y-3 px-5 pt-2">
+        <DemoBanner>
+          Wkrótce — tu pojawią się prawdziwe wydarzenia: sprzątanie plaży, sadzenie drzew, wspólne spacery. Na razie to
+          podgląd, jak będą wyglądać.
+        </DemoBanner>
         {events.map((e, i) => {
           const meta = typeMeta[e.type]
           return (
@@ -49,6 +50,7 @@ export function Events() {
                     </div>
                     <div className="mt-1 font-display text-[17px] font-bold leading-tight text-ink">{e.title}</div>
                   </div>
+                  <SoonBadge />
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 text-xs font-bold text-muted">
                   <span className="inline-flex items-center gap-1">
@@ -62,8 +64,8 @@ export function Events() {
                   </span>
                 </div>
                 <div className="p-4 pt-3">
-                  <PrimaryButton onClick={() => setJoined((j) => ({ ...j, [e.id]: !j[e.id] }))} className="w-full py-2.5 text-sm">
-                    {joined[e.id] ? `✓ Zapisan${gender === 'm' ? 'y' : 'a'} — do zobaczenia!` : 'Dołączam'}
+                  <PrimaryButton disabled className="w-full py-2.5 text-sm">
+                    Wkrótce
                   </PrimaryButton>
                 </div>
               </Card>

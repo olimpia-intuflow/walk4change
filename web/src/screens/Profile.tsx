@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
 import { Footprints, CalendarHeart, Recycle, GearSix, PencilSimple, Check } from '@phosphor-icons/react'
-import { Card, Pill } from '../components/ui'
+import { Card, Pill, PrimaryButton } from '../components/ui'
 import { Glyph } from '../components/Glyph'
 import { FootstepTrail } from '../components/Footsteps'
 import { api, INTEREST_OPTIONS, type Profile as ProfileT, type EcoReport } from '../lib/api'
@@ -14,28 +14,67 @@ export function Profile() {
   const [p, setP] = useState<ProfileT | null>(null)
   const [interests, setInterests] = useState<string[]>(getInterests())
   const [editing, setEditing] = useState(false)
+  const [interestsSaving, setInterestsSaving] = useState(false)
   const [gender, setGender] = useState<Gender>(getGender())
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
   const [ecoReports, setEcoReports] = useState<EcoReport[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   const pickGender = (g: Gender) => {
     setGender(g)
     saveGender(g)
   }
 
+  const loadProfile = () => {
+    setLoading(true)
+    setLoadError(false)
+    ;(async () => {
+      try {
+        const profile = await api.getProfile()
+        // backend to źródło prawdy o zainteresowaniach — localStorage to tylko cache offline
+        setInterests(profile.interests)
+        saveInterests(profile.interests)
+
+        const [counters, reports] = await Promise.all([
+          api.getProfileCounters(),
+          api.getMyEcoReports(),
+        ])
+        setEcoReports(reports)
+        setP({
+          ...profile,
+          stats: { walks: counters.totalWalks, events: 0, ecoReports: reports.length },
+          badges: buildBadges({ totalWalks: counters.totalWalks, streakDays: counters.streakDays, ecoReports: reports.length }),
+        })
+      } catch {
+        setLoadError(true)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }
+
   useEffect(() => {
-    api.getProfile().then(setP)
-    api.getMyEcoReports().then(setEcoReports).catch(() => {})
+    loadProfile()
   }, [])
 
   const toggle = (tag: string) =>
     setInterests((cur) => (cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]))
 
-  const finishEdit = () => {
-    saveInterests(interests)
+  const finishEdit = async () => {
     setEditing(false)
+    saveInterests(interests) // cache offline natychmiast
+    setInterestsSaving(true)
+    try {
+      const updated = await api.patchProfile({ interests })
+      setP((cur) => (cur ? { ...cur, interests: updated.interests } : cur))
+    } catch {
+      /* backend nieosiągalny — zostaje lokalny cache, spróbujemy przy kolejnej edycji */
+    } finally {
+      setInterestsSaving(false)
+    }
   }
 
   const saveName = async () => {
@@ -43,7 +82,7 @@ export function Profile() {
     if (!name || !p) return
     setNameSaving(true)
     try {
-      const updated = await api.patchProfile(name)
+      const updated = await api.patchProfile({ display_name: name })
       setP({ ...p, name: updated.name })
     } catch { /* ignore */ } finally {
       setNameSaving(false)
@@ -51,7 +90,24 @@ export function Profile() {
     }
   }
 
-  if (!p) return null
+  if (loading) {
+    return (
+      <div className="px-5 pt-5">
+        <Card className="p-6 text-center text-sm font-semibold text-muted">Wczytywanie profilu…</Card>
+      </div>
+    )
+  }
+
+  if (loadError || !p) {
+    return (
+      <div className="px-5 pt-5">
+        <Card className="flex flex-col items-center gap-3 p-6 text-center">
+          <p className="text-sm font-semibold text-rose-600">Nie udało się wczytać profilu.</p>
+          <PrimaryButton onClick={loadProfile}>Spróbuj ponownie</PrimaryButton>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -114,7 +170,8 @@ export function Profile() {
             <span className="text-xs font-bold uppercase tracking-wide text-muted">Zainteresowania</span>
             <button
               onClick={() => (editing ? finishEdit() : setEditing(true))}
-              className="inline-flex items-center gap-1 rounded-full bg-sea/10 px-2.5 py-1 text-xs font-bold text-deep transition active:scale-95"
+              disabled={interestsSaving}
+              className="inline-flex items-center gap-1 rounded-full bg-sea/10 px-2.5 py-1 text-xs font-bold text-deep transition active:scale-95 disabled:opacity-60"
             >
               {editing ? (
                 <>
@@ -172,18 +229,22 @@ export function Profile() {
 
         {/* badges */}
         <h2 className="mb-3 mt-6 font-display text-lg font-bold text-ink">Odznaki</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {p.badges.map((b, i) => (
-            <motion.div key={b.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
-              <Card className="flex items-center gap-3 p-3.5">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sand/20 text-[#c8761b]">
-                  <Glyph k={b.iconKey} size={22} />
-                </div>
-                <span className="text-sm font-bold leading-tight text-ink">{b.label}</span>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+        {p.badges.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3">
+            {p.badges.map((b, i) => (
+              <motion.div key={b.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
+                <Card className="flex items-center gap-3 p-3.5">
+                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-sand/20 text-[#c8761b]">
+                    <Glyph k={b.iconKey} size={22} />
+                  </div>
+                  <span className="text-sm font-bold leading-tight text-ink">{b.label}</span>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted">Odznaki pojawią się wraz z aktywnością.</p>
+        )}
 
         {/* moje zgłoszenia eko */}
         {ecoReports.length > 0 && (
@@ -223,6 +284,19 @@ export function Profile() {
       </div>
     </div>
   )
+}
+
+/**
+ * Odznaki nie mają backendu — wyprowadzamy je z realnych liczników, tylko
+ * gdy liczba faktycznie na nie zasługuje. Bez backendu na odznaki = brak
+ * wymyślonych danych, po prostu pusta lista.
+ */
+function buildBadges(counters: { totalWalks: number; streakDays: number; ecoReports: number }): ProfileT['badges'] {
+  const badges: ProfileT['badges'] = []
+  if (counters.totalWalks > 0) badges.push({ id: 'firststep', label: 'Pierwszy spacer', iconKey: 'firststep' })
+  if (counters.streakDays > 0) badges.push({ id: 'streak', label: `Seria ${counters.streakDays} dni`, iconKey: 'streak' })
+  if (counters.ecoReports > 0) badges.push({ id: 'shore', label: 'Strażnik Bałtyku', iconKey: 'shore' })
+  return badges
 }
 
 function StatCard({ icon, value, label, onClick }: { icon: ReactNode; value: number; label: string; onClick?: () => void }) {
