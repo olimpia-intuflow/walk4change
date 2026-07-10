@@ -48,10 +48,14 @@ function timeAgo(iso: string): string {
 
 const EMPTY_FRIENDS: FriendsData = { accepted: [], incoming: [], outgoing: [] }
 
+/** Zakładki trybu solo — 8 sekcji w jednym scrollu robiło bałagan. */
+type CommunityTab = 'feed' | 'friends' | 'ranking'
+
 export function Community() {
   const navigate = useNavigate()
   const { mode } = useMode()
   const isTeam = mode === 'team'
+  const [tab, setTab] = useState<CommunityTab>('feed')
   const [walks, setWalks] = useState<CommunityWalk[]>([])
   const [board, setBoard] = useState<LeaderboardRow[]>([])
   const [teamBoard, setTeamBoard] = useState<TeamRow[]>([])
@@ -199,6 +203,10 @@ export function Community() {
 
   const visibleResults = searchResults.filter((r) => !knownIds.has(r.id))
 
+  // kropka na zakładce Znajomi: nieprzeczytane wiadomości + zaproszenia do przyjęcia
+  const friendsBadge =
+    conversations.reduce((sum, c) => sum + c.unread, 0) + friends.incoming.length
+
   const joinWalk = async (sessionId: string) => {
     if (joiningId) return
     setJoiningId(sessionId)
@@ -259,6 +267,41 @@ export function Community() {
 
         {!isTeam && (
           <>
+            {/* zakładki */}
+            <div className="inline-flex w-full rounded-2xl bg-white/70 p-1 text-sm font-bold ring-1 ring-white/60">
+              <button
+                onClick={() => setTab('feed')}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 transition ${
+                  tab === 'feed' ? 'bg-gradient-to-br from-sea to-deep text-white shadow' : 'text-muted'
+                }`}
+              >
+                <Heart size={15} /> Feed
+              </button>
+              <button
+                onClick={() => setTab('friends')}
+                className={`relative flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 transition ${
+                  tab === 'friends' ? 'bg-gradient-to-br from-sea to-deep text-white shadow' : 'text-muted'
+                }`}
+              >
+                <UsersThree size={15} /> Znajomi
+                {friendsBadge > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                    {friendsBadge}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setTab('ranking')}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 transition ${
+                  tab === 'ranking' ? 'bg-gradient-to-br from-sea to-deep text-white shadow' : 'text-muted'
+                }`}
+              >
+                <Trophy size={15} /> Ranking
+              </button>
+            </div>
+
+            {tab === 'feed' && (
+            <>
             {/* ── Na spacerze teraz ── */}
             <section>
               <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
@@ -441,6 +484,18 @@ export function Community() {
               </section>
             )}
 
+            {feed.length === 0 && (
+              <Card className="p-4">
+                <p className="text-sm text-muted">
+                  W feedzie na razie pusto. Pochwal się sprzątaniem na ekranie Eko — Twój wpis pojawi się tutaj 🌊
+                </p>
+              </Card>
+            )}
+            </>
+            )}
+
+            {tab === 'friends' && (
+            <>
             {/* ── Wiadomości ── */}
             {conversations.length > 0 && (
               <section>
@@ -651,10 +706,13 @@ export function Community() {
                 })}
               </div>
             </section>
+            </>
+            )}
           </>
         )}
 
-        {/* ── Spacery / wspólne wyjścia ── */}
+        {/* ── Spacery / wspólne wyjścia (zapowiedź; solo: na dole zakładki Feed) ── */}
+        {(isTeam || tab === 'feed') && (
         <section>
           <h2 className="mb-3 font-display text-lg font-bold text-ink">{isTeam ? 'Spacery działów' : 'Wspólne spacery'}</h2>
           <div className="space-y-3">
@@ -690,8 +748,10 @@ export function Community() {
             ))}
           </div>
         </section>
+        )}
 
         {/* ── Ranking ── */}
+        {(isTeam || tab === 'ranking') && (
         <section>
           <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
             <Trophy size={18} className="text-sand" /> {isTeam ? 'Ranking zespołów' : 'Ranking tygodnia'}
@@ -732,6 +792,7 @@ export function Community() {
             </p>
           )}
         </section>
+        )}
       </div>
     </div>
   )
