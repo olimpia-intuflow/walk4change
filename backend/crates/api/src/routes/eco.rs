@@ -69,7 +69,19 @@ pub struct CreateEcoRequest {
     pub photo_after_url: Option<String>,
 }
 
+/// Points credited to `user_totals` per eco action — matches the copy the
+/// frontend has always shown ("+15 pkt za czujność" / "+25 pkt").
+const POINTS_REPORT: i32 = 15;
+const POINTS_CLEANUP: i32 = 25;
+
+/// Max point-earning eco reports per user per day (anti-spam; further
+/// submissions still save, they just stop paying out).
+const MAX_PAID_REPORTS_PER_DAY: i64 = 10;
+
 /// `POST /api/v1/eco/reports` — create an eco report for the authenticated user.
+///
+/// Also credits points (report +15 / cleanup +25) to `user_totals`, capped at
+/// [`MAX_PAID_REPORTS_PER_DAY`] paid submissions per day.
 pub async fn create_report(
     auth: AuthUser,
     State(state): State<AppState>,
@@ -85,6 +97,7 @@ pub async fn create_report(
     }
     // A report problem starts 'reported'; a cleanup brag is 'cleaned'.
     let status = if kind == "cleanup" { "cleaned" } else { "reported" };
+    let points = if kind == "cleanup" { POINTS_CLEANUP } else { POINTS_REPORT };
 
     // Length + URL validation (security audit 2026-07-08).
     let mut errors: Vec<FieldError> = Vec::new();
@@ -97,6 +110,8 @@ pub async fn create_report(
     if !errors.is_empty() {
         return Err(AppError::Validation(errors));
     }
+
+    let mut tx = state.pool.begin().await.map_err(AppError::internal)?;
 
     let row: EcoRow = sqlx::query_as(&format!(
         "INSERT INTO eco_reports \
@@ -114,30 +129,81 @@ pub async fn create_report(
     .bind(body.photo_url)
     .bind(body.photo_before_url)
     .bind(body.photo_after_url)
-    .fetch_one(&state.pool)
+    .fetch_one(&mut *tx)
     .await
     .map_err(AppError::internal)?;
+
+    // Count today's submissions INCLUDING the row just inserted.
+    let today_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM eco_reports \
+         WHERE user_id = $1 AND created_at >= date_trunc('day', now())",
+    )
+    .bind(auth.id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(AppError::internal)?;
+
+    if today_count <= MAX_PAID_REPORTS_PER_DAY {
+        sqlx::query(
+            "INSERT INTO user_totals (user_id, total_points) VALUES ($1, $2) \
+             ON CONFLICT (user_id) DO UPDATE \
+             SET total_points = user_totals.total_points + EXCLUDED.total_points, \
+                 updated_at = now()",
+        )
+        .bind(auth.id)
+        .bind(rust_decimal::Decimal::from(points))
+        .execute(&mut *tx)
+        .await
+        .map_err(AppError::internal)?;
+    }
+
+    tx.commit().await.map_err(AppError::internal)?;
 
     Ok(response::data(row_json(
         row.0, row.1, row.2, row.3, row.4, row.5, row.6, row.7, row.8, row.9,
     )))
 }
 
-/// `GET /api/v1/eco/reports` — recent reports across all users (community feed).
+/// One feed row: report columns + the author's display name.
+type FeedRow = (
+    uuid::Uuid,
+    String,
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    chrono::DateTime<chrono::Utc>,
+    String,
+);
+
+/// `GET /api/v1/eco/reports` — recent reports across all users (community feed),
+/// each annotated with the author's `display_name`.
 pub async fn list_reports(
     _auth: AuthUser,
     State(state): State<AppState>,
 ) -> Result<Json<Value>, AppError> {
-    let rows: Vec<EcoRow> = sqlx::query_as(&format!(
-        "SELECT {SELECT_COLS} FROM eco_reports ORDER BY created_at DESC LIMIT 50"
-    ))
+    let rows: Vec<FeedRow> = sqlx::query_as(
+        "SELECT e.id, e.kind, e.category, e.description, e.location, e.status, \
+                e.photo_url, e.photo_before_url, e.photo_after_url, e.created_at, \
+                u.display_name \
+         FROM eco_reports e \
+         JOIN users u ON u.id = e.user_id \
+         ORDER BY e.created_at DESC LIMIT 50",
+    )
     .fetch_all(&state.pool)
     .await
     .map_err(AppError::internal)?;
 
     let items: Vec<Value> = rows
         .into_iter()
-        .map(|r| row_json(r.0, r.1, r.2, r.3, r.4, r.5, r.6, r.7, r.8, r.9))
+        .map(|r| {
+            let mut v = row_json(r.0, r.1, r.2, r.3, r.4, r.5, r.6, r.7, r.8, r.9);
+            v["author"] = Value::String(r.10);
+            v
+        })
         .collect();
     Ok(response::data(items))
 }
