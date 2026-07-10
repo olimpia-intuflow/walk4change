@@ -275,7 +275,7 @@ export function Community() {
                   tab === 'feed' ? 'bg-gradient-to-br from-sea to-deep text-white shadow' : 'text-muted'
                 }`}
               >
-                <Heart size={15} /> Feed
+                <Heart size={15} /> Tablica
               </button>
               <button
                 onClick={() => setTab('friends')}
@@ -487,7 +487,7 @@ export function Community() {
             {feed.length === 0 && (
               <Card className="p-4">
                 <p className="text-sm text-muted">
-                  W feedzie na razie pusto. Pochwal się sprzątaniem na ekranie Eko — Twój wpis pojawi się tutaj 🌊
+                  Na tablicy na razie pusto. Pochwal się sprzątaniem na ekranie Eko — Twój wpis pojawi się tutaj 🌊
                 </p>
               </Card>
             )}
