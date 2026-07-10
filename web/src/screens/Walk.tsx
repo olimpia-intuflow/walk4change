@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'motion/react'
 import { Play, Square, UsersThree, Leaf, Trophy, Footprints, MapPin, SignIn, Copy, CheckCircle, HandHeart } from '@phosphor-icons/react'
 import { ScreenHeader, Card, PrimaryButton, SoftButton, Pill } from '../components/ui'
 import { FootstepTrail } from '../components/Footsteps'
 import { Celebrate } from '../components/Celebrate'
-import { LiveMap, type MapWalker } from '../components/LiveMap'
+import { RealMap } from '../components/RealMap'
 import { apiRequest, hasBackend, getToken } from '../lib/http'
 import { login, register, currentUserId, requestMagicLink } from '../lib/auth'
 import { LiveSocket, type ScoredPing, type LeaderRow } from '../lib/ws'
@@ -39,9 +40,11 @@ function fmt(sec: number) {
 }
 
 export function Walk() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [phase, setPhase] = useState<Phase>(getToken() ? 'idle' : 'auth')
   const [sec, setSec] = useState(0)
   const timer = useRef<number | null>(null)
+  const joinedViaQueryRef = useRef(false)
 
   // auth
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -59,9 +62,14 @@ export function Walk() {
   const [copied, setCopied] = useState(false)
   const [gpsNote, setGpsNote] = useState<string | null>(null)
 
+  // "spaceruję — dołącz" (widoczność dla innych)
+  const [isOpen, setIsOpen] = useState(false)
+  const [openNote, setOpenNote] = useState('')
+
   // live state
   const walkersRef = useRef<Map<string, Walker>>(new Map())
   const [walkers, setWalkers] = useState<Walker[]>([])
+  const [myTrack, setMyTrack] = useState<{ lat: number; lng: number }[]>([])
   const namesRef = useRef<Map<string, string>>(new Map())
   const [leaderboard, setLeaderboard] = useState<LeaderRow[]>([])
   const socketRef = useRef<LiveSocket | null>(null)
@@ -153,11 +161,27 @@ export function Walk() {
   const connectAndStream = (id: string) => {
     socketRef.current?.close()
     walkersRef.current = new Map(); flush()
-    seqRef.current = 0; setSec(0); setSummary(null); resetSteps()
+    seqRef.current = 0; setSec(0); setSummary(null); resetSteps(); setMyTrack([])
     socketRef.current = makeSock(id)
     startGps(id)
     setPhase('active')
   }
+
+  // Kontrakt z ekranem Społeczności: ?session=<uuid> w URL = użytkownik już
+  // dołączył do sesji przez API (POST join zrobiony wcześniej przez Community).
+  // Tu tylko ustawiamy sessionId i startujemy spacer w trybie uczestnika —
+  // bez tworzenia nowej sesji i bez join-by-code.
+  useEffect(() => {
+    const sid = searchParams.get('session')
+    if (!sid || joinedViaQueryRef.current || phase !== 'idle') return
+    joinedViaQueryRef.current = true
+    setSessionId(sid); setJoinCode(null); setCodeInput('')
+    connectAndStream(sid)
+    const next = new URLSearchParams(searchParams)
+    next.delete('session')
+    setSearchParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, searchParams])
 
   // Re-connect WS when app returns to foreground mid-walk
   useEffect(() => {
@@ -176,7 +200,10 @@ export function Walk() {
     if (busy) return
     setBusy(true); setError(null)
     try {
-      const res = await apiRequest<WalkSession>('/walks', { method: 'POST' })
+      const res = await apiRequest<WalkSession>('/walks', {
+        method: 'POST',
+        body: { is_open: isOpen, open_note: isOpen && openNote.trim() ? openNote.trim() : null },
+      })
       if (!res.data) throw new Error('no session')
       setSessionId(res.data.id); setJoinCode(res.data.join_code); setCodeInput('')
       connectAndStream(res.data.id)
@@ -207,13 +234,18 @@ export function Walk() {
         // Drop poor-fix readings client-side: a wide accuracy radius drifts
         // several metres while standing still and would mint phantom points.
         if (typeof acc === 'number' && acc > 35) return
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        // Ślad na mapę live — niezależny od throttle'u wysyłki pingów poniżej,
+        // bo tylko rysuje trasę i nie wpływa na punktację (tę liczy serwer).
+        setMyTrack((prev) => [...prev, { lat, lng }].slice(-500))
         const now = Date.now()
         // ~4 s cadence so genuine walking (>~1 m/s) clears the server's 5 m
         // jitter deadband, while stationary drift stays under it.
         if (now - lastSentRef.current < 4000) return
         lastSentRef.current = now
         seqRef.current += 1
-        socketRef.current?.sendPing(id, seqRef.current, pos.coords.latitude, pos.coords.longitude, acc)
+        socketRef.current?.sendPing(id, seqRef.current, lat, lng, acc)
       },
       (err) => setGpsNote(`GPS niedostępny: ${err.message}. Włącz lokalizację i odśwież.`),
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
@@ -306,6 +338,33 @@ export function Walk() {
                   <p className="mx-auto mt-2 max-w-[280px] text-sm text-muted">SeaSteps sam wykryje Twoją pozycję GPS i naliczy bonusy: <b className="text-deep">we dwoje ×1.5</b>, <b className="text-deep">natura ×3</b>.</p>
                 </div>
               </Card>
+
+              <Card className="mt-3 p-4">
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-ink">Pokaż innym, że idę — może ktoś dołączy 🌊</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isOpen}
+                    aria-label="Pokaż innym, że idę"
+                    onClick={() => setIsOpen((v) => !v)}
+                    className={`relative h-7 w-12 shrink-0 rounded-full border border-white/70 transition-colors ${isOpen ? 'bg-sea' : 'bg-white/70'}`}
+                  >
+                    <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${isOpen ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </label>
+                {isOpen && (
+                  <textarea
+                    value={openNote}
+                    onChange={(e) => setOpenNote(e.target.value.slice(0, 200))}
+                    maxLength={200}
+                    rows={2}
+                    placeholder="np. chętnie pogadam po drodze"
+                    className="mt-3 w-full resize-none rounded-xl border border-white/70 bg-white/80 px-3 py-2 text-sm outline-none"
+                  />
+                )}
+              </Card>
+
               <PrimaryButton onClick={startWalk} className="mt-5 w-full py-4 text-base"><Play size={20} weight="fill" color="white" /> {busy ? 'Chwila…' : 'Rozpocznij spacer'}</PrimaryButton>
               <Card className="mt-3 p-4">
                 <label className="block text-xs font-bold uppercase tracking-wide text-muted">…albo dołącz do znajomego — wpisz jego kod</label>
@@ -358,7 +417,9 @@ export function Walk() {
                 </Card>
               )}
 
-              {walkers.some((w) => w.trail.length > 0) && <Card className="mt-3 p-2"><LiveMap walkers={walkers as MapWalker[]} /></Card>}
+              <Card className="mt-3 overflow-hidden p-2">
+                <RealMap points={myTrack} live className="h-56" />
+              </Card>
 
               {walkers.length > 1 && (
                 <div className="mt-3 grid grid-cols-2 gap-2">

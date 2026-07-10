@@ -13,7 +13,11 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [pass, setPass] = useState('')
   const [pass2, setPass2] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).has('expired')
+      ? 'Sesja wygasła — zaloguj się ponownie.'
+      : null,
+  )
   const [loading, setLoading] = useState(false)
   const [magicMsg, setMagicMsg] = useState<string | null>(null)
 

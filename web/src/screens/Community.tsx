@@ -1,13 +1,44 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'motion/react'
-import { MapPin, Clock, Trophy, UsersThree, Footprints, ChatCircle, Buildings, Heart } from '@phosphor-icons/react'
+import {
+  MapPin,
+  Clock,
+  Trophy,
+  UsersThree,
+  Footprints,
+  ChatCircle,
+  Buildings,
+  Heart,
+  UserPlus,
+  MagnifyingGlass,
+} from '@phosphor-icons/react'
 import { ScreenHeader, Card, Pill, PrimaryButton, SoftButton, SoonBadge, DemoBanner } from '../components/ui'
 import { Avatar } from '../components/Avatar'
 import { useMode } from '../lib/mode'
 import { getInterests } from '../lib/interests'
-import { api, type CommunityWalk, type LeaderboardRow, type TeamRow, type MatchPerson } from '../lib/api'
+import { ApiError } from '../lib/http'
+import {
+  api,
+  type CommunityWalk,
+  type LeaderboardRow,
+  type TeamRow,
+  type MatchPerson,
+  type OpenWalkItem,
+  type Conversation,
+  type FriendsData,
+  type UserSearchResult,
+} from '../lib/api'
+
+function minutesAgo(iso: string): number {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  return Math.max(0, Math.round(diffMs / 60000))
+}
+
+const EMPTY_FRIENDS: FriendsData = { accepted: [], incoming: [], outgoing: [] }
 
 export function Community() {
+  const navigate = useNavigate()
   const { mode } = useMode()
   const isTeam = mode === 'team'
   const [walks, setWalks] = useState<CommunityWalk[]>([])
@@ -16,12 +47,121 @@ export function Community() {
   const [matches, setMatches] = useState<MatchPerson[]>([])
   const myInterests = getInterests()
 
+  // ── Na spacerze teraz ──
+  const [openWalks, setOpenWalks] = useState<OpenWalkItem[]>([])
+  const [joiningId, setJoiningId] = useState<string | null>(null)
+  const [joinErrors, setJoinErrors] = useState<Record<string, string>>({})
+
+  // ── Wiadomości ──
+  const [conversations, setConversations] = useState<Conversation[]>([])
+
+  // ── Znajomi ──
+  const [friends, setFriends] = useState<FriendsData>(EMPTY_FRIENDS)
+  const [respondingId, setRespondingId] = useState<string | null>(null)
+
+  // ── Znajdź ludzi ──
+  const [query, setQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [sendingId, setSendingId] = useState<string | null>(null)
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set())
+  const [conflictIds, setConflictIds] = useState<Set<string>>(new Set())
+
   useEffect(() => {
-    api.getCommunityWalks().then(setWalks)
-    api.getLeaderboard().then(setBoard)
-    api.getTeamLeaderboard().then(setTeamBoard)
-    api.getMatches().then(setMatches)
+    api.getCommunityWalks().then(setWalks).catch(() => {})
+    api.getLeaderboard().then(setBoard).catch(() => {})
+    api.getTeamLeaderboard().then(setTeamBoard).catch(() => {})
+    api.getMatches().then(setMatches).catch(() => {})
   }, [])
+
+  const loadOpenWalks = () => {
+    api.getOpenWalks().then(setOpenWalks).catch(() => {})
+  }
+  const loadFriends = () => {
+    api.getFriends().then(setFriends).catch(() => {})
+  }
+
+  useEffect(() => {
+    if (isTeam) return
+    loadOpenWalks()
+    api.getConversations().then(setConversations).catch(() => {})
+    loadFriends()
+    const id = window.setInterval(loadOpenWalks, 30000)
+    return () => window.clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTeam])
+
+  // debounced search
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setSearchResults([])
+      setSearching(false)
+      return
+    }
+    setSearching(true)
+    const t = window.setTimeout(() => {
+      api
+        .searchUsers(q)
+        .then(setSearchResults)
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearching(false))
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [query])
+
+  const knownIds = useMemo(() => {
+    const s = new Set<string>()
+    friends.accepted.forEach((f) => s.add(f.id))
+    friends.incoming.forEach((r) => s.add(r.user.id))
+    friends.outgoing.forEach((r) => s.add(r.user.id))
+    return s
+  }, [friends])
+
+  const visibleResults = searchResults.filter((r) => !knownIds.has(r.id))
+
+  const joinWalk = async (sessionId: string) => {
+    if (joiningId) return
+    setJoiningId(sessionId)
+    setJoinErrors((e) => ({ ...e, [sessionId]: '' }))
+    try {
+      await api.joinOpenWalk(sessionId)
+      navigate(`/walk?session=${sessionId}`)
+    } catch (err) {
+      const msg = err instanceof ApiError && err.status === 409 ? 'Komplet uczestników' : 'Nie udało się dołączyć.'
+      setJoinErrors((e) => ({ ...e, [sessionId]: msg }))
+    } finally {
+      setJoiningId(null)
+    }
+  }
+
+  const respond = async (requestId: string, accept: boolean) => {
+    if (respondingId) return
+    setRespondingId(requestId)
+    try {
+      await api.respondFriendRequest(requestId, accept)
+      loadFriends()
+    } catch {
+      /* best-effort — lista po prostu się nie zmieni */
+    } finally {
+      setRespondingId(null)
+    }
+  }
+
+  const addFriend = async (id: string) => {
+    if (sendingId) return
+    setSendingId(id)
+    try {
+      await api.sendFriendRequest(id)
+      setSentIds((s) => new Set(s).add(id))
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setConflictIds((s) => new Set(s).add(id))
+      }
+    } finally {
+      setSendingId(null)
+    }
+  }
 
   return (
     <div>
@@ -33,60 +173,277 @@ export function Community() {
 
       <div className="space-y-4 px-5 pt-2">
         <DemoBanner>
-          Poznawanie ludzi i wspólne spacery — w przygotowaniu. Poniżej przykładowe dopasowania.
+          {isTeam
+            ? 'To demo wersji firmowej — program firmowy projektujemy indywidualnie dla każdej firmy.'
+            : 'Znajomi, czat i dołączanie do spacerów już działają. Dopasowania i umawianie spacerów — wkrótce.'}
         </DemoBanner>
 
-        {/* ── Dopasowani do Ciebie (tylko solo) ── */}
         {!isTeam && (
-          <section>
-            <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
-              <Heart size={18} className="text-leaf" /> Dopasowani do Ciebie
-            </h2>
-            <div className="space-y-3">
-              {matches.map((m, i) => {
-                const shared = m.interests.filter((t) => myInterests.includes(t))
-                return (
-                  <motion.div key={m.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
-                    <Card className="p-4">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={m.name} size={48} />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-display text-lg font-bold text-ink">{m.name}</span>
-                            <span className="inline-flex items-center gap-0.5 text-xs font-bold text-muted">
-                              <MapPin size={12} /> {m.distance}
-                            </span>
+          <>
+            {/* ── Na spacerze teraz ── */}
+            <section>
+              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
+                <Footprints size={18} className="text-sea" /> Na spacerze teraz
+              </h2>
+              {openWalks.length === 0 ? (
+                <Card className="p-4">
+                  <p className="text-sm text-muted">Nikt teraz nie spaceruje z otwartym zaproszeniem. Wyjdź na spacer i pokaż się innym!</p>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {openWalks.map((w, i) => {
+                    const mins = minutesAgo(w.startedAt)
+                    const err = joinErrors[w.sessionId]
+                    return (
+                      <motion.div
+                        key={w.sessionId}
+                        initial={{ opacity: 0, y: 14 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.06 }}
+                      >
+                        <Card className="p-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={w.hostName} size={48} />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-display text-lg font-bold text-ink">{w.hostName}</div>
+                              <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-bold text-muted">
+                                <span className="inline-flex items-center gap-1">
+                                  <UsersThree size={12} /> {w.participants} uczestników
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Clock size={12} /> {mins < 1 ? 'przed chwilą' : `${mins} min temu`}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted">{m.bio}</p>
-                        </div>
-                        <SoonBadge />
+                          {w.note && <p className="mt-2.5 text-sm text-muted">„{w.note}"</p>}
+                          {err && <p className="mt-2 text-sm font-semibold text-rose-600">{err}</p>}
+                          <PrimaryButton
+                            onClick={() => joinWalk(w.sessionId)}
+                            disabled={joiningId === w.sessionId}
+                            className="mt-3 w-full py-2.5 text-sm"
+                          >
+                            <Footprints size={16} /> {joiningId === w.sessionId ? 'Dołączam…' : 'Dołącz'}
+                          </PrimaryButton>
+                        </Card>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* ── Wiadomości ── */}
+            {conversations.length > 0 && (
+              <section>
+                <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
+                  <ChatCircle size={18} className="text-sea" /> Wiadomości
+                </h2>
+                <Card className="divide-y divide-[rgba(20,52,58,0.06)] p-2">
+                  {conversations.map((c) => (
+                    <button
+                      key={c.userId}
+                      type="button"
+                      onClick={() => navigate(`/chat/${c.userId}`, { state: { name: c.name, avatar: c.avatar } })}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition active:scale-[0.99]"
+                    >
+                      <Avatar name={c.name} size={44} />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display text-base font-bold text-ink">{c.name}</div>
+                        <p className="truncate text-xs text-muted">
+                          {c.lastFromMe ? 'Ty: ' : ''}
+                          {c.lastBody}
+                        </p>
                       </div>
-
-                      {shared.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                          <span className="text-xs font-bold text-leaf">Wspólne:</span>
-                          {shared.map((s) => (
-                            <Pill key={s} tone="leaf">
-                              {s}
-                            </Pill>
-                          ))}
-                        </div>
+                      {c.unread > 0 && (
+                        <span className="grid h-6 min-w-6 shrink-0 place-items-center rounded-full bg-sea px-1.5 text-xs font-bold text-white">
+                          {c.unread}
+                        </span>
                       )}
+                    </button>
+                  ))}
+                </Card>
+              </section>
+            )}
 
-                      <div className="mt-3 grid grid-cols-2 gap-2.5">
-                        <SoftButton disabled className="py-2.5 text-sm">
-                          <ChatCircle size={16} /> Wkrótce
+            {/* ── Znajomi ── */}
+            <section>
+              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
+                <UsersThree size={18} className="text-sea" /> Znajomi
+              </h2>
+
+              {friends.incoming.length > 0 && (
+                <div className="mb-3 space-y-2.5">
+                  {friends.incoming.map((req) => (
+                    <Card key={req.requestId} className="p-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={req.user.name} size={40} />
+                        <span className="flex-1 text-sm font-bold text-ink">{req.user.name} chce się zaprzyjaźnić</span>
+                      </div>
+                      <div className="mt-2.5 grid grid-cols-2 gap-2">
+                        <SoftButton
+                          onClick={() => respond(req.requestId, false)}
+                          disabled={respondingId === req.requestId}
+                          className="py-2 text-sm"
+                        >
+                          Odrzuć
                         </SoftButton>
-                        <PrimaryButton disabled className="py-2.5 text-sm">
-                          <Footprints size={16} /> Wkrótce
+                        <PrimaryButton
+                          onClick={() => respond(req.requestId, true)}
+                          disabled={respondingId === req.requestId}
+                          className="py-2 text-sm"
+                        >
+                          Przyjmij
                         </PrimaryButton>
                       </div>
                     </Card>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </section>
+                  ))}
+                </div>
+              )}
+
+              {friends.accepted.length > 0 ? (
+                <div className="space-y-2.5">
+                  {friends.accepted.map((f) => {
+                    const shared = f.interests.filter((t) => myInterests.includes(t))
+                    return (
+                      <Card key={f.id} className="p-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={f.name} size={44} />
+                          <div className="min-w-0 flex-1">
+                            <div className="font-display text-base font-bold text-ink">{f.name}</div>
+                            {shared.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {shared.map((s) => (
+                                  <Pill key={s} tone="leaf">
+                                    {s}
+                                  </Pill>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <SoftButton
+                            onClick={() => navigate(`/chat/${f.id}`, { state: { name: f.name, avatar: f.avatar } })}
+                            className="px-4 py-2 text-sm"
+                          >
+                            <ChatCircle size={16} /> Napisz
+                          </SoftButton>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+              ) : friends.incoming.length === 0 ? (
+                <Card className="p-4">
+                  <p className="text-sm text-muted">Nie masz jeszcze znajomych — poszukaj kogoś poniżej i zaproś na spacer.</p>
+                </Card>
+              ) : null}
+
+              {friends.outgoing.length > 0 && (
+                <div className="mt-2.5 space-y-1.5">
+                  {friends.outgoing.map((req) => (
+                    <div key={req.requestId} className="flex items-center gap-3 rounded-2xl px-3 py-2 text-sm">
+                      <Avatar name={req.user.name} size={32} />
+                      <span className="flex-1 font-semibold text-muted">{req.user.name}</span>
+                      <Pill tone="muted">wysłano</Pill>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* ── Znajdź ludzi ── */}
+            <section>
+              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
+                <MagnifyingGlass size={18} className="text-sea" /> Znajdź ludzi
+              </h2>
+              <Card className="p-3">
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Szukaj po imieniu…"
+                  className="w-full rounded-xl border border-white/70 bg-white/80 px-3 py-2.5 text-sm outline-none"
+                />
+                {searching && <p className="mt-2 px-1 text-xs text-muted">Szukam…</p>}
+                {!searching && query.trim().length >= 2 && visibleResults.length === 0 && (
+                  <p className="mt-2 px-1 text-xs text-muted">Nikogo nie znaleziono.</p>
+                )}
+                {visibleResults.length > 0 && (
+                  <div className="mt-2 divide-y divide-[rgba(20,52,58,0.06)]">
+                    {visibleResults.map((r) => {
+                      const sent = sentIds.has(r.id)
+                      const conflict = conflictIds.has(r.id)
+                      return (
+                        <div key={r.id} className="flex items-center gap-3 py-2.5">
+                          <Avatar name={r.name} size={40} />
+                          <span className="flex-1 text-sm font-bold text-ink">{r.name}</span>
+                          {sent ? (
+                            <Pill tone="muted">wysłano</Pill>
+                          ) : conflict ? (
+                            <Pill tone="muted">już się znacie</Pill>
+                          ) : (
+                            <SoftButton onClick={() => addFriend(r.id)} disabled={sendingId === r.id} className="px-4 py-2 text-sm">
+                              <UserPlus size={16} /> Dodaj
+                            </SoftButton>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </Card>
+            </section>
+
+            {/* ── Dopasowani do Ciebie ── */}
+            <section>
+              <h2 className="mb-3 flex items-center gap-2 font-display text-lg font-bold text-ink">
+                <Heart size={18} className="text-leaf" /> Dopasowani do Ciebie
+              </h2>
+              <div className="space-y-3">
+                {matches.map((m, i) => {
+                  const shared = m.interests.filter((t) => myInterests.includes(t))
+                  return (
+                    <motion.div key={m.id} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}>
+                      <Card className="p-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar name={m.name} size={48} />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-display text-lg font-bold text-ink">{m.name}</span>
+                              <span className="inline-flex items-center gap-0.5 text-xs font-bold text-muted">
+                                <MapPin size={12} /> {m.distance}
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted">{m.bio}</p>
+                          </div>
+                          <SoonBadge />
+                        </div>
+
+                        {shared.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            <span className="text-xs font-bold text-leaf">Wspólne:</span>
+                            {shared.map((s) => (
+                              <Pill key={s} tone="leaf">
+                                {s}
+                              </Pill>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="mt-3 grid grid-cols-2 gap-2.5">
+                          <SoftButton disabled className="py-2.5 text-sm">
+                            <ChatCircle size={16} /> Wkrótce
+                          </SoftButton>
+                          <PrimaryButton disabled className="py-2.5 text-sm">
+                            <Footprints size={16} /> Wkrótce
+                          </PrimaryButton>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </section>
+          </>
         )}
 
         {/* ── Spacery / wspólne wyjścia ── */}
@@ -155,12 +512,17 @@ export function Community() {
                     </span>
                     <Avatar name={r.name} size={36} />
                     <span className={`flex-1 text-sm font-bold ${r.isMe ? 'text-deep' : 'text-ink'}`}>
-                      {r.name} {r.isMe && <Pill tone="sea">to Ty</Pill>}
+                      {r.name} {r.isMe && <Pill tone="sea">to Ty</Pill>} {r.isDemo && <Pill tone="muted">demo</Pill>}
                     </span>
                     <span className="font-display text-base font-bold text-sea">{r.points}</span>
                   </div>
                 ))}
           </Card>
+          {!isTeam && board.some((r) => r.isDemo) && (
+            <p className="mt-2 px-1 text-xs text-muted">
+              Konta z plakietką „demo" pokazują przykładowe dane — reszta rankingu jest prawdziwa.
+            </p>
+          )}
         </section>
       </div>
     </div>

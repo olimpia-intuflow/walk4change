@@ -7,6 +7,7 @@ import { Login } from './screens/Login'
 import { Home } from './screens/Home'
 import { Walk } from './screens/Walk'
 import { Community } from './screens/Community'
+import { Chat } from './screens/Chat'
 import { Events } from './screens/Events'
 import { Profile } from './screens/Profile'
 import { Eco } from './screens/Eco'
@@ -54,6 +55,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/walk" element={<Walk />} />
         <Route path="/community" element={<Community />} />
+        <Route path="/chat/:userId" element={<Chat />} />
         <Route path="/events" element={<Events />} />
         <Route path="/eco" element={<Eco />} />
         <Route path="/history" element={<History />} />

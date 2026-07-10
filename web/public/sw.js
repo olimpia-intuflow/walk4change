@@ -1,5 +1,5 @@
 // SeaSteps — prosty service worker (instalowalność PWA + offline fallback)
-const CACHE = 'seasteps-v3'
+const CACHE = 'seasteps-v4'
 const SHELL = ['/app/', '/app/index.html', '/app/manifest.webmanifest', '/app/favicon.svg', '/app/pwa-192.png', '/app/pwa-512.png']
 
 self.addEventListener('install', (e) => {

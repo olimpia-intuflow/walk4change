@@ -103,6 +103,22 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
 
   if (res.status === 204) return {}
 
+  // Wygasła/nieważna sesja na wywołaniu z tokenem => czyścimy stan logowania
+  // i wracamy do /login (klucze lustrzane z lib/auth.ts — import zrobiłby cykl).
+  if (res.status === 401 && auth) {
+    try {
+      localStorage.removeItem('ss-auth')
+      localStorage.removeItem('ss-uid')
+    } catch {
+      /* storage niedostępny */
+    }
+    setToken(null)
+    if (!window.location.pathname.endsWith('/login')) {
+      window.location.assign(`${import.meta.env.BASE_URL}login?expired=1`)
+    }
+    throw new ApiError('Sesja wygasła — zaloguj się ponownie.', 'SESSION_EXPIRED', 401)
+  }
+
   let json: Envelope<T> = {}
   try {
     json = (await res.json()) as Envelope<T>

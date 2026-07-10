@@ -5,7 +5,7 @@ import { Footprints, Flame, Leaf, UsersThree, CalendarHeart, Warning, Sparkle, B
 import { Logo } from '../components/Logo'
 import { ModeToggle } from '../components/ModeToggle'
 import { FootstepTrail } from '../components/Footsteps'
-import { Card, Pill, ProgressBar } from '../components/ui'
+import { Card, Pill, ProgressBar, SoonBadge, DemoBanner, PrimaryButton } from '../components/ui'
 import { SponsorIcon } from '../components/SponsorIcon'
 import { Glyph } from '../components/Glyph'
 import { Avatar } from '../components/Avatar'
@@ -60,6 +60,23 @@ export function Home() {
   const [rewards, setRewards] = useState<Reward[]>([])
   const [teamRewards, setTeamRewards] = useState<Reward[]>([])
   const [sponsors, setSponsors] = useState<Sponsor[]>([])
+  const [redeeming, setRedeeming] = useState(false)
+  const [redeemedCode, setRedeemedCode] = useState<string | null>(null)
+  const [redeemError, setRedeemError] = useState<string | null>(null)
+
+  const redeem = async (rewardId: string) => {
+    setRedeeming(true)
+    setRedeemError(null)
+    try {
+      const redemption = await api.redeemReward(rewardId)
+      if (redemption) setRedeemedCode(redemption.code)
+      api.getRewards().then(setRewards).catch(() => {})
+    } catch {
+      setRedeemError('Nie udało się odebrać — nagroda może być wyczerpana albo brakuje punktów.')
+    } finally {
+      setRedeeming(false)
+    }
+  }
 
   useEffect(() => {
     // Stats can change while Home stays mounted (e.g. returning from a walk),
@@ -181,6 +198,7 @@ export function Home() {
       {(() => {
         const reward = isTeam ? teamRewards[0] : rewards[0]
         if (!reward) return null
+        const canRedeem = !isTeam && reward.progress >= 100
         return (
           <motion.div key={isTeam ? 'reward-team' : 'reward-ja'} {...fade(3)} className="mt-4">
             <Card className="p-5">
@@ -192,11 +210,33 @@ export function Home() {
                   <div className="font-display text-lg font-bold text-ink">{reward.title}</div>
                   <div className="text-xs font-bold text-muted">{reward.kind}</div>
                 </div>
-                <Pill tone="sand">
-                  <Sparkle size={12} /> blisko!
-                </Pill>
+                {!canRedeem && reward.progress >= 70 && (
+                  <Pill tone="sand">
+                    <Sparkle size={12} /> blisko!
+                  </Pill>
+                )}
               </div>
               <ProgressBar value={reward.progress} label={isTeam ? 'Wspólny postęp zespołu' : 'Postęp do nagrody'} />
+              {canRedeem && (
+                redeemedCode ? (
+                  <div className="mt-3 rounded-2xl bg-leaf/15 p-3 text-center">
+                    <div className="text-xs font-bold text-muted">Twój kod — pokaż partnerowi:</div>
+                    <div className="mt-1 font-mono text-xl font-bold tracking-widest text-deep">{redeemedCode}</div>
+                    <div className="mt-1 text-xs text-muted">Kod znajdziesz też w profilu.</div>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <PrimaryButton
+                      className="w-full py-2.5 text-sm"
+                      disabled={redeeming}
+                      onClick={() => redeem(reward.id)}
+                    >
+                      <Sparkle size={16} /> Odbierz nagrodę
+                    </PrimaryButton>
+                    {redeemError && <p className="mt-2 text-center text-xs font-semibold text-rose-600">{redeemError}</p>}
+                  </div>
+                )
+              )}
             </Card>
           </motion.div>
         )
@@ -204,7 +244,11 @@ export function Home() {
 
       {/* B2B strip (team only) */}
       {isTeam && (
-        <motion.div {...fade(4)} className="mt-4">
+        <motion.div {...fade(4)} className="mt-4 space-y-3">
+          <DemoBanner>
+            To demo wersji firmowej — pokazuje, jak SeaSteps może wyglądać u Ciebie. Program firmowy
+            projektujemy indywidualnie dla każdej firmy.
+          </DemoBanner>
           <Card className="flex items-center gap-3 bg-gradient-to-br from-sea/10 to-leaf/10 p-4">
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/70 text-sea">
               <Buildings size={18} />
@@ -230,7 +274,7 @@ export function Home() {
       <motion.div {...fade(6)} className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
-            <Storefront size={18} className="text-sea" /> Lokalni partnerzy
+            <Storefront size={18} className="text-sea" /> Lokalni partnerzy <SoonBadge />
           </h2>
           <button onClick={() => nav('/partners')} className="inline-flex items-center gap-0.5 text-sm font-bold text-sea">
             Wszystkie <CaretRight size={14} />

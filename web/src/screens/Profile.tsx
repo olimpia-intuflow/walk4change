@@ -5,7 +5,7 @@ import { Footprints, CalendarHeart, Recycle, GearSix, PencilSimple, Check } from
 import { Card, Pill, PrimaryButton } from '../components/ui'
 import { Glyph } from '../components/Glyph'
 import { FootstepTrail } from '../components/Footsteps'
-import { api, INTEREST_OPTIONS, type Profile as ProfileT, type EcoReport } from '../lib/api'
+import { api, INTEREST_OPTIONS, type Profile as ProfileT, type EcoReport, type RedemptionItem, type Reward } from '../lib/api'
 import { getInterests, saveInterests } from '../lib/interests'
 import { getGender, saveGender, type Gender } from '../lib/settings'
 
@@ -20,6 +20,8 @@ export function Profile() {
   const [nameInput, setNameInput] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
   const [ecoReports, setEcoReports] = useState<EcoReport[]>([])
+  const [redemptions, setRedemptions] = useState<RedemptionItem[]>([])
+  const [rewardTitles, setRewardTitles] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
 
@@ -58,6 +60,12 @@ export function Profile() {
 
   useEffect(() => {
     loadProfile()
+    // Moje kody nagród — best-effort, sekcja znika przy błędzie/braku.
+    api.getMyRedemptions().then(setRedemptions).catch(() => {})
+    api
+      .getRewards()
+      .then((rs: Reward[]) => setRewardTitles(Object.fromEntries(rs.map((r) => [r.id, r.title]))))
+      .catch(() => {})
   }, [])
 
   const toggle = (tag: string) =>
@@ -244,6 +252,26 @@ export function Profile() {
           </div>
         ) : (
           <p className="text-sm text-muted">Odznaki pojawią się wraz z aktywnością.</p>
+        )}
+
+        {/* moje nagrody (kody z wymiany punktów) */}
+        {redemptions.length > 0 && (
+          <>
+            <h2 className="mb-3 mt-6 font-display text-lg font-bold text-ink">Moje nagrody</h2>
+            <div className="space-y-2.5">
+              {redemptions.map((r) => (
+                <Card key={r.id} className="flex items-center gap-3 p-3.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-bold text-ink">{rewardTitles[r.rewardId] ?? 'Nagroda'}</div>
+                    <div className="font-mono text-base font-bold tracking-widest text-deep">{r.code}</div>
+                  </div>
+                  <Pill tone={r.status === 'redeemed' ? 'muted' : r.status === 'expired' ? 'sand' : 'leaf'}>
+                    {r.status === 'redeemed' ? 'wykorzystany' : r.status === 'expired' ? 'wygasł' : 'do użycia'}
+                  </Pill>
+                </Card>
+              ))}
+            </div>
+          </>
         )}
 
         {/* moje zgłoszenia eko */}

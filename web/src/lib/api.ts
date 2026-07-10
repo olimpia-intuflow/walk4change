@@ -95,7 +95,16 @@ export interface LeaderboardRow {
   avatar: string
   points: number
   isMe?: boolean
+  /** Konto pokazowe (seed w bazie) — oznaczane plakietką „demo" w rankingu. */
+  isDemo?: boolean
 }
+
+/** Stałe UUID kont demo z seedu bazy (Ania, Bartek, Marta). */
+const DEMO_USER_IDS = new Set([
+  'a1a1a1a1-0000-0000-0000-000000000001',
+  'b2b2b2b2-0000-0000-0000-000000000002',
+  'c3c3c3c3-0000-0000-0000-000000000003',
+])
 
 // ── Scoring (lokalny, lustro silnika backendu) ────────────
 export const MULTIPLIER = { together: 1.5, nature: 3 } as const
@@ -122,7 +131,7 @@ const today: TodayStats = {
 }
 
 const communityWalks: CommunityWalk[] = [
-  { id: 'c1', who: 'Bek', avatar: '🚶', where: 'Bulwar Gdynia', when: 'Dziś 17:30', vibe: 'Spokojnie, nad wodą' },
+  { id: 'c1', who: 'Bartek', avatar: '🚶', where: 'Bulwar Gdynia', when: 'Dziś 17:30', vibe: 'Spokojnie, nad wodą' },
   { id: 'c2', who: 'Marta', avatar: '🧘', where: 'Park Oliwski', when: 'Jutro 9:00', vibe: 'Poranny reset' },
   { id: 'c3', who: 'Kamil', avatar: '🏃', where: 'Plaża Brzeźno', when: 'Sob 11:00', vibe: 'Żwawo + kawa' },
 ]
@@ -166,7 +175,7 @@ export const INTEREST_OPTIONS = [
 
 const people: MatchPerson[] = [
   { id: 'p1', name: 'Marta', avatar: '🧘', interests: ['Mindfulness', 'Natura', 'Joga', 'Kawa i rozmowy'], bio: 'Poranne spacery dla resetu głowy.', distance: '1,2 km' },
-  { id: 'p2', name: 'Bek', avatar: '🚶', interests: ['Spacery nad morzem', 'Eko', 'Pies', 'Sprzątanie plaż'], bio: 'Chodzę z psem, sprzątam przy okazji.', distance: '800 m' },
+  { id: 'p2', name: 'Bartek', avatar: '🚶', interests: ['Spacery nad morzem', 'Eko', 'Pies', 'Sprzątanie plaż'], bio: 'Chodzę z psem, sprzątam przy okazji.', distance: '800 m' },
   { id: 'p3', name: 'Igor', avatar: '📷', interests: ['Fotografia', 'Natura', 'Spacery nad morzem'], bio: 'Łapię światło o wschodzie nad Zatoką.', distance: '2,4 km' },
   { id: 'p4', name: 'Hania', avatar: '🌿', interests: ['Eko', 'Mindfulness', 'Medytacja', 'Natura'], bio: 'Wolne tempo, dużo zieleni.', distance: '600 m' },
 ]
@@ -325,6 +334,7 @@ function mapLeaderRow(row: BackendLeaderRow, index: number, myId: string | null)
     avatar: '🚶',
     points: Math.round(parseFloat(row.total_points)), // rust_decimal => string
     isMe: myId != null && row.user_id === myId,
+    isDemo: DEMO_USER_IDS.has(row.user_id),
   }
 }
 
@@ -497,6 +507,267 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   return (res.data ?? []).map((row, i) => mapLeaderRow(row, i, myId))
 }
 
+// ── Znajomi (backend: /friends*) ──────────────────────────
+export interface FriendProfile {
+  id: string
+  name: string
+  avatar: string
+  interests: string[]
+  bio: string
+}
+
+export interface PendingRequest {
+  requestId: string
+  user: FriendProfile
+}
+
+export interface FriendsData {
+  accepted: FriendProfile[]
+  incoming: PendingRequest[]
+  outgoing: PendingRequest[]
+}
+
+function mapFriendProfile(p: BackendProfile): FriendProfile {
+  return {
+    id: p.id,
+    name: p.display_name,
+    avatar: p.avatar_url || '🌊',
+    interests: p.interests ?? [],
+    bio: p.bio ?? '',
+  }
+}
+
+interface BackendFriendsList {
+  accepted: BackendProfile[]
+  incoming_pending: { request_id: string; user: BackendProfile }[]
+  outgoing_pending: { request_id: string; user: BackendProfile }[]
+}
+
+async function fetchFriends(): Promise<FriendsData> {
+  const res = await apiRequest<BackendFriendsList>('/friends')
+  const d = res.data
+  return {
+    accepted: (d?.accepted ?? []).map(mapFriendProfile),
+    incoming: (d?.incoming_pending ?? []).map((r) => ({ requestId: r.request_id, user: mapFriendProfile(r.user) })),
+    outgoing: (d?.outgoing_pending ?? []).map((r) => ({ requestId: r.request_id, user: mapFriendProfile(r.user) })),
+  }
+}
+
+async function sendFriendRequest(userId: string): Promise<void> {
+  await apiRequest('/friends/request', { method: 'POST', body: { addressee_id: userId } })
+}
+
+async function respondFriendRequest(requestId: string, accept: boolean): Promise<void> {
+  await apiRequest('/friends/respond', { method: 'POST', body: { request_id: requestId, accept } })
+}
+
+export interface UserSearchResult {
+  id: string
+  name: string
+  avatar: string
+}
+
+async function searchUsers(q: string): Promise<UserSearchResult[]> {
+  const res = await apiRequest<{ id: string; display_name: string; avatar_url: string | null }[]>(
+    `/users/search?q=${encodeURIComponent(q)}`,
+  )
+  return (res.data ?? []).map((u) => ({ id: u.id, name: u.display_name, avatar: u.avatar_url || '🌊' }))
+}
+
+// ── Czat 1:1 (backend: /conversations, /messages/:id) ─────
+export interface ChatMessage {
+  id: string
+  senderId: string
+  recipientId: string
+  body: string
+  createdAt: string
+  readAt: string | null
+}
+
+export interface Conversation {
+  userId: string
+  name: string
+  avatar: string
+  lastBody: string
+  lastAt: string
+  lastFromMe: boolean
+  unread: number
+}
+
+interface BackendMessage {
+  id: string
+  sender_id: string
+  recipient_id: string
+  body: string
+  created_at: string
+  read_at: string | null
+}
+
+function mapMessage(m: BackendMessage): ChatMessage {
+  return {
+    id: m.id,
+    senderId: m.sender_id,
+    recipientId: m.recipient_id,
+    body: m.body,
+    createdAt: m.created_at,
+    readAt: m.read_at,
+  }
+}
+
+async function fetchConversations(): Promise<Conversation[]> {
+  const res = await apiRequest<{
+    user_id: string
+    display_name: string
+    avatar_url: string | null
+    last_body: string
+    last_at: string
+    last_from_me: boolean
+    unread: number
+  }[]>('/conversations')
+  return (res.data ?? []).map((c) => ({
+    userId: c.user_id,
+    name: c.display_name,
+    avatar: c.avatar_url || '🌊',
+    lastBody: c.last_body,
+    lastAt: c.last_at,
+    lastFromMe: c.last_from_me,
+    unread: c.unread,
+  }))
+}
+
+/** Historia rozmowy (rosnąco po dacie). `after` = tylko nowsze niż znacznik (polling). */
+async function fetchMessages(userId: string, after?: string): Promise<ChatMessage[]> {
+  const suffix = after ? `?after=${encodeURIComponent(after)}` : ''
+  const res = await apiRequest<BackendMessage[]>(`/messages/${userId}${suffix}`)
+  return (res.data ?? []).map(mapMessage)
+}
+
+async function sendChatMessage(userId: string, body: string): Promise<ChatMessage | null> {
+  const res = await apiRequest<BackendMessage>(`/messages/${userId}`, { method: 'POST', body: { body } })
+  return res.data ? mapMessage(res.data) : null
+}
+
+// ── "Spaceruję — dołącz" (backend: /walks/open) ───────────
+export interface OpenWalkItem {
+  sessionId: string
+  hostId: string
+  hostName: string
+  note: string
+  startedAt: string
+  participants: number
+}
+
+async function fetchOpenWalks(): Promise<OpenWalkItem[]> {
+  const res = await apiRequest<{
+    session_id: string
+    host_id: string
+    host_name: string
+    open_note: string | null
+    started_at: string
+    participants: number
+  }[]>('/walks/open')
+  return (res.data ?? []).map((w) => ({
+    sessionId: w.session_id,
+    hostId: w.host_id,
+    hostName: w.host_name,
+    note: w.open_note ?? '',
+    startedAt: w.started_at,
+    participants: w.participants,
+  }))
+}
+
+/** Dołącz do otwartego spaceru (bez znajomości; 409 = komplet uczestników). */
+async function joinOpenWalk(sessionId: string): Promise<void> {
+  await apiRequest(`/walks/${sessionId}/join`, { method: 'POST', body: {} })
+}
+
+// ── Historia spacerów z serwera (backend: /me/walks, /walks/:id/track) ──
+export interface ServerWalk {
+  sessionId: string
+  startedAt: string
+  endedAt: string | null
+  meters: number
+  points: number
+  isHost: boolean
+  companions: number
+}
+
+async function fetchMyWalks(): Promise<ServerWalk[]> {
+  const res = await apiRequest<{
+    session_id: string
+    started_at: string
+    ended_at: string | null
+    total_meters: string
+    total_points: string
+    is_host: boolean
+    companions: number
+  }[]>('/me/walks')
+  return (res.data ?? []).map((w) => ({
+    sessionId: w.session_id,
+    startedAt: w.started_at,
+    endedAt: w.ended_at,
+    meters: Math.round(parseFloat(w.total_meters)),
+    points: Math.round(parseFloat(w.total_points)),
+    isHost: w.is_host,
+    companions: w.companions,
+  }))
+}
+
+export interface TrackPoint {
+  userId: string
+  seq: number
+  lat: number
+  lng: number
+}
+
+async function fetchWalkTrack(sessionId: string): Promise<TrackPoint[]> {
+  const res = await apiRequest<{ user_id: string; seq: number; lat: number; lng: number }[]>(
+    `/walks/${sessionId}/track`,
+  )
+  return (res.data ?? []).map((p) => ({ userId: p.user_id, seq: p.seq, lat: p.lat, lng: p.lng }))
+}
+
+// ── Nagrody: odbieranie (backend: /rewards/:id/redeem, /me/redemptions) ──
+export interface RedemptionItem {
+  id: string
+  rewardId: string
+  code: string
+  pointsSpent: number
+  status: string
+  createdAt: string
+}
+
+interface BackendRedemption {
+  id: string
+  reward_id: string
+  code: string
+  points_spent: string
+  status: string
+  created_at: string
+}
+
+function mapRedemption(r: BackendRedemption): RedemptionItem {
+  return {
+    id: r.id,
+    rewardId: r.reward_id,
+    code: r.code,
+    pointsSpent: Math.round(parseFloat(r.points_spent)),
+    status: r.status,
+    createdAt: r.created_at,
+  }
+}
+
+/** Wymień punkty na nagrodę. Rzuca ApiError (409 = brak stanu / za mało punktów). */
+async function redeemReward(rewardId: string): Promise<RedemptionItem | null> {
+  const res = await apiRequest<BackendRedemption>(`/rewards/${rewardId}/redeem`, { method: 'POST', body: {} })
+  return res.data ? mapRedemption(res.data) : null
+}
+
+async function fetchMyRedemptions(): Promise<RedemptionItem[]> {
+  const res = await apiRequest<BackendRedemption[]>('/me/redemptions')
+  return (res.data ?? []).map(mapRedemption)
+}
+
 export const api = {
   getProfile: fetchProfile,
   patchProfile,
@@ -516,4 +787,18 @@ export const api = {
   getTeamLeaderboard: () => wait(teamLeaderboard),
   getCorporateEvents: () => wait(corporateEvents),
   getTeamRewards: () => wait(teamRewards),
+  // — znajomi + czat + otwarte spacery + historia + nagrody (realny backend) —
+  getFriends: fetchFriends,
+  sendFriendRequest,
+  respondFriendRequest,
+  searchUsers,
+  getConversations: fetchConversations,
+  getMessages: fetchMessages,
+  sendMessage: sendChatMessage,
+  getOpenWalks: fetchOpenWalks,
+  joinOpenWalk,
+  getMyWalks: fetchMyWalks,
+  getWalkTrack: fetchWalkTrack,
+  redeemReward,
+  getMyRedemptions: fetchMyRedemptions,
 }
