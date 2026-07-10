@@ -219,7 +219,18 @@ pub fn build_app(state: AppState) -> Router {
         .route("/api/v1/friends/request", post(routes::friends::send_request))
         .route("/api/v1/friends/respond", post(routes::friends::respond))
         .route("/api/v1/friends", get(routes::friends::list))
+        .route("/api/v1/users/search", get(routes::users::search))
+        .route(
+            "/api/v1/conversations",
+            get(routes::messages::list_conversations),
+        )
+        .route(
+            "/api/v1/messages/:user_id",
+            get(routes::messages::get_conversation).post(routes::messages::send_message),
+        )
         .route("/api/v1/walks", post(routes::walks::start_walk))
+        .route("/api/v1/walks/open", get(routes::walks::open_walks))
+        .route("/api/v1/me/walks", get(routes::walks::my_walks))
         .route("/api/v1/walks/join-by-code", post(routes::walks::join_by_code))
         .route("/api/v1/walks/:id", get(routes::walks::get_walk))
         .route("/api/v1/walks/:id/join", post(routes::walks::join_walk))

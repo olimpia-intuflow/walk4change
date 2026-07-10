@@ -39,6 +39,10 @@ pub struct WalkSession {
     pub join_code: Option<String>,
     pub started_at: DateTime<Utc>,
     pub ended_at: Option<DateTime<Utc>>,
+    /// Opt-in visibility: the walk is listed publicly so strangers can join.
+    pub is_open: bool,
+    /// Optional host note shown on the open-walks list ("chętnie pogadam").
+    pub open_note: Option<String>,
 }
 
 /// A single participant in a walk session.
@@ -98,4 +102,60 @@ pub struct PingPoint {
     pub lng: f64,
     pub points: Decimal,
     pub recorded_at: DateTime<Utc>,
+}
+
+/// A direct chat message between two friends.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct Message {
+    pub id: Uuid,
+    pub sender_id: Uuid,
+    pub recipient_id: Uuid,
+    pub body: String,
+    pub created_at: DateTime<Utc>,
+    pub read_at: Option<DateTime<Utc>>,
+}
+
+/// One row of `GET /api/v1/conversations`: the partner plus the latest message.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct ConversationSummary {
+    pub user_id: Uuid,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
+    pub last_body: String,
+    pub last_at: DateTime<Utc>,
+    pub last_from_me: bool,
+    pub unread: i64,
+}
+
+/// One row of `GET /api/v1/walks/open`: a live walk whose host opted in
+/// to be visible ("spaceruję — dołącz").
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct OpenWalk {
+    pub session_id: Uuid,
+    pub host_id: Uuid,
+    pub host_name: String,
+    pub open_note: Option<String>,
+    pub started_at: DateTime<Utc>,
+    pub participants: i64,
+}
+
+/// One row of `GET /api/v1/me/walks`: a finished walk of the caller.
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct MyWalk {
+    pub session_id: Uuid,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub total_meters: Decimal,
+    pub total_points: Decimal,
+    pub is_host: bool,
+    /// Other participants (any who ever joined), excluding the caller.
+    pub companions: i64,
+}
+
+/// Minimal public user info for search results (no e-mail on purpose).
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct UserSearchItem {
+    pub id: Uuid,
+    pub display_name: String,
+    pub avatar_url: Option<String>,
 }

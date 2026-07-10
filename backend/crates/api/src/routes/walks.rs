@@ -27,19 +27,39 @@ fn default_limit() -> i64 {
     1000
 }
 
+/// Optional body for `POST /api/v1/walks` ("spaceruję — dołącz" opt-in).
+#[derive(Deserialize, Default)]
+pub struct StartWalkBody {
+    #[serde(default)]
+    pub is_open: bool,
+    #[serde(default)]
+    pub open_note: Option<String>,
+}
+
 /// `POST /api/v1/walks`
 ///
 /// Start a new walk session. The authenticated user becomes the host and is
-/// automatically added as the first participant.
+/// automatically added as the first participant. An optional JSON body may
+/// set `is_open` (+ `open_note`) to list the walk publicly so others can join
+/// (the body stays optional for backward compatibility with older clients).
 ///
 /// Returns 201 with a `Location` header pointing to the new session and the
 /// session data (including `join_code`) in the body.
 pub async fn start_walk(
     auth: AuthUser,
     State(state): State<AppState>,
+    body: Option<Json<StartWalkBody>>,
 ) -> Result<Response, AppError> {
+    let StartWalkBody { is_open, open_note } = body.map(|Json(b)| b).unwrap_or_default();
     let session_id = Uuid::new_v4();
-    let session = walk_repo::start(&state.pool, session_id, auth.id).await?;
+    let session = walk_repo::start(
+        &state.pool,
+        session_id,
+        auth.id,
+        is_open,
+        open_note.as_deref(),
+    )
+    .await?;
     let location = format!("/api/v1/walks/{}", session.id);
     Ok((
         StatusCode::CREATED,
@@ -47,6 +67,41 @@ pub async fn start_walk(
         response::data(session),
     )
         .into_response())
+}
+
+/// `GET /api/v1/walks/open`
+///
+/// List currently-active open walks ("spaceruję — dołącz"), newest first.
+/// Any authenticated user can browse and join these via `POST /walks/:id/join`.
+pub async fn open_walks(
+    _auth: AuthUser,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, AppError> {
+    let walks = walk_repo::open_walks(&state.pool).await?;
+    Ok(response::data(walks))
+}
+
+/// Query parameters for `GET /api/v1/me/walks`.
+#[derive(Deserialize)]
+pub struct MyWalksQuery {
+    #[serde(default = "default_my_walks_limit")]
+    pub limit: i64,
+}
+
+fn default_my_walks_limit() -> i64 {
+    50
+}
+
+/// `GET /api/v1/me/walks`
+///
+/// The caller's finished walks, newest first (server-side walk history).
+pub async fn my_walks(
+    auth: AuthUser,
+    State(state): State<AppState>,
+    Query(query): Query<MyWalksQuery>,
+) -> Result<Json<Value>, AppError> {
+    let walks = walk_repo::my_walks(&state.pool, auth.id, query.limit).await?;
+    Ok(response::data(walks))
 }
 
 /// `POST /api/v1/walks/:id/join`

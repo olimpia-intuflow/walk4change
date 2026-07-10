@@ -1,7 +1,10 @@
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{error::AppError, models::Profile};
+use crate::{
+    error::AppError,
+    models::{Profile, UserSearchItem},
+};
 
 /// Minimal user row used during authentication.
 #[derive(sqlx::FromRow)]
@@ -79,6 +82,28 @@ pub async fn get_profile(pool: &PgPool, id: Uuid) -> Result<Profile, AppError> {
     .await
     .map_err(AppError::internal)?
     .ok_or(AppError::NotFound)
+}
+
+/// Search users by display name (case-insensitive substring), excluding the caller.
+///
+/// Returns at most 10 minimal public rows (id + display name + avatar; never e-mail).
+/// LIKE wildcards in the query are escaped so they match literally.
+pub async fn search(pool: &PgPool, q: &str, exclude: Uuid) -> Result<Vec<UserSearchItem>, AppError> {
+    let escaped = q.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let pattern = format!("%{escaped}%");
+
+    sqlx::query_as::<_, UserSearchItem>(
+        "SELECT id, display_name, avatar_url \
+         FROM users \
+         WHERE display_name ILIKE $1 AND id <> $2 \
+         ORDER BY display_name \
+         LIMIT 10",
+    )
+    .bind(pattern)
+    .bind(exclude)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::internal)
 }
 
 /// Fields that can be updated via `PATCH /api/v1/me`.

@@ -3,8 +3,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    error::AppError,
-    models::{ParticipantInfo, PingPoint, WalkDetail, WalkSession},
+    error::{AppError, FieldError},
+    models::{MyWalk, OpenWalk, ParticipantInfo, PingPoint, WalkDetail, WalkSession},
     repo::friend,
 };
 
@@ -37,31 +37,50 @@ fn random_join_code() -> String {
         .collect()
 }
 
-/// Thin struct for fetching host_id + status in a single query.
+/// Thin struct for fetching host_id + status (+ open flag) in a single query.
 #[derive(sqlx::FromRow)]
 struct SessionRow {
     host_id: Uuid,
     status: String,
+    is_open: bool,
 }
 
 /// Insert a new `active` walk session with a random `join_code`, and add the host as the
 /// first participant — all in a single transaction.
+///
+/// `is_open` + `open_note` power the "spaceruję — dołącz" opt-in: an open
+/// session is listed publicly via [`open_walks`] and joinable without friendship.
 pub async fn start(
     pool: &PgPool,
     session_id: Uuid,
     host_id: Uuid,
+    is_open: bool,
+    open_note: Option<&str>,
 ) -> Result<WalkSession, AppError> {
+    let open_note = open_note.map(str::trim).filter(|s| !s.is_empty());
+    if let Some(note) = open_note {
+        if note.chars().count() > 200 {
+            return Err(AppError::Validation(vec![FieldError {
+                field: "open_note".into(),
+                message: "note must be at most 200 characters".into(),
+                code: "INVALID_LENGTH".into(),
+            }]));
+        }
+    }
+
     let join_code = random_join_code();
     let mut tx = pool.begin().await.map_err(AppError::internal)?;
 
     let session: WalkSession = sqlx::query_as(
-        "INSERT INTO walk_sessions (id, host_id, status, join_code) \
-         VALUES ($1, $2, 'active', $3) \
-         RETURNING id, host_id, status, join_code, started_at, ended_at",
+        "INSERT INTO walk_sessions (id, host_id, status, join_code, is_open, open_note) \
+         VALUES ($1, $2, 'active', $3, $4, $5) \
+         RETURNING id, host_id, status, join_code, started_at, ended_at, is_open, open_note",
     )
     .bind(session_id)
     .bind(host_id)
     .bind(&join_code)
+    .bind(is_open)
+    .bind(open_note)
     .fetch_one(&mut *tx)
     .await
     .map_err(AppError::internal)?;
@@ -84,25 +103,45 @@ pub async fn start(
 
 /// Join an active walk session as `actor`.
 ///
+/// Friendship with the host is required UNLESS the session is open
+/// ("spaceruję — dołącz" opt-in); open sessions instead enforce the same
+/// active-participant cap as [`join_by_code`].
+///
 /// Errors:
 /// - Session not found or not `active` → 404.
-/// - `actor` is not friends with the host → 403.
+/// - closed session and `actor` is not friends with the host → 403.
+/// - open session already at the participant cap → 409 `session_full`.
 /// - `actor` already joined (UNIQUE violation) → 409.
 pub async fn join(pool: &PgPool, session_id: Uuid, actor: Uuid) -> Result<(), AppError> {
     let row: Option<SessionRow> = sqlx::query_as(
-        "SELECT host_id, status FROM walk_sessions WHERE id = $1",
+        "SELECT host_id, status, is_open FROM walk_sessions WHERE id = $1",
     )
     .bind(session_id)
     .fetch_optional(pool)
     .await
     .map_err(AppError::internal)?;
 
-    let SessionRow { host_id, status } = row.ok_or(AppError::NotFound)?;
+    let SessionRow { host_id, status, is_open } = row.ok_or(AppError::NotFound)?;
     if status != "active" {
         return Err(AppError::NotFound);
     }
 
-    if !friend::are_friends(pool, host_id, actor).await? {
+    if is_open {
+        // Open walk: anyone may join, but cap active participants (same
+        // sockpuppet guard as join_by_code).
+        let active_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM walk_participants \
+             WHERE session_id = $1 AND left_at IS NULL",
+        )
+        .bind(session_id)
+        .fetch_one(pool)
+        .await
+        .map_err(AppError::internal)?;
+
+        if active_count >= MAX_ACTIVE_PARTICIPANTS_PER_SESSION {
+            return Err(AppError::Conflict("session_full".into()));
+        }
+    } else if !friend::are_friends(pool, host_id, actor).await? {
         return Err(AppError::Forbidden);
     }
 
@@ -327,7 +366,7 @@ pub async fn get(
     }
 
     let session: Option<WalkSession> = sqlx::query_as(
-        "SELECT id, host_id, status, join_code, started_at, ended_at \
+        "SELECT id, host_id, status, join_code, started_at, ended_at, is_open, open_note \
          FROM walk_sessions WHERE id = $1",
     )
     .bind(session_id)
@@ -397,6 +436,55 @@ pub async fn track(
     .map_err(AppError::internal)?;
 
     Ok(pings)
+}
+
+/// List currently-active open walks ("spaceruję — dołącz"), newest first.
+///
+/// Public within the app (any authenticated user). Sessions older than 12h
+/// are hidden even if never stopped, so stale sessions do not linger.
+pub async fn open_walks(pool: &PgPool) -> Result<Vec<OpenWalk>, AppError> {
+    let walks: Vec<OpenWalk> = sqlx::query_as(
+        "SELECT ws.id AS session_id, ws.host_id, u.display_name AS host_name, \
+                ws.open_note, ws.started_at, \
+                (SELECT count(*) FROM walk_participants wp \
+                  WHERE wp.session_id = ws.id AND wp.left_at IS NULL) AS participants \
+         FROM walk_sessions ws \
+         JOIN users u ON u.id = ws.host_id \
+         WHERE ws.is_open AND ws.status = 'active' \
+           AND ws.started_at > now() - interval '12 hours' \
+         ORDER BY ws.started_at DESC \
+         LIMIT 50",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::internal)?;
+
+    Ok(walks)
+}
+
+/// List the caller's finished walks, newest first (server-side walk history).
+pub async fn my_walks(pool: &PgPool, actor: Uuid, limit: i64) -> Result<Vec<MyWalk>, AppError> {
+    let limit = limit.clamp(1, 100);
+
+    let walks: Vec<MyWalk> = sqlx::query_as(
+        "SELECT ws.id AS session_id, ws.started_at, ws.ended_at, \
+                wp.total_meters, wp.total_points, \
+                (ws.host_id = $1) AS is_host, \
+                (SELECT count(*) - 1 FROM walk_participants w2 \
+                  WHERE w2.session_id = ws.id) AS companions \
+         FROM walk_participants wp \
+         JOIN walk_sessions ws ON ws.id = wp.session_id \
+         WHERE wp.user_id = $1 AND ws.status = 'finished' \
+         ORDER BY ws.started_at DESC \
+         LIMIT $2",
+    )
+    .bind(actor)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(AppError::internal)?;
+
+    Ok(walks)
 }
 
 /// Returns `true` if `actor` is currently an active (non-left) participant of an active session.
