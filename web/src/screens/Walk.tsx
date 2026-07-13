@@ -9,6 +9,7 @@ import { RealMap } from '../components/RealMap'
 import { apiRequest, hasBackend, getToken, ApiError } from '../lib/http'
 import { login, register, currentUserId, requestMagicLink } from '../lib/auth'
 import { LiveSocket, type ScoredPing, type LeaderRow } from '../lib/ws'
+import { watchPosition as watchGeoPosition, needsLocationDisclosure, markLocationDisclosureAccepted, type GeoWatch } from '../lib/geo'
 import { useStepCounter } from '../hooks/useStepCounter'
 import { addWalk } from '../lib/walks'
 import { api, type WalkDetailInfo, type RatingFlag } from '../lib/api'
@@ -76,7 +77,8 @@ export function Walk() {
   const [leaderboard, setLeaderboard] = useState<LeaderRow[]>([])
   const socketRef = useRef<LiveSocket | null>(null)
   const seqRef = useRef(0)
-  const watchRef = useRef<number | null>(null)
+  const watchRef = useRef<GeoWatch | null>(null)
+  const [disclosureFor, setDisclosureFor] = useState<string | null>(null)
   const lastSentRef = useRef(0)
   const [summary, setSummary] = useState<{ points: number; meters: number; steps: number; together: boolean; nature: boolean } | null>(null)
   const { steps, permissionNeeded, requestPermission, addMeters, reset: resetSteps } = useStepCounter()
@@ -265,17 +267,18 @@ export function Walk() {
 
   // ── automatic GPS: find position + stream it; modifiers come back from server ──
   const startGps = (id: string) => {
-    if (!('geolocation' in navigator)) { setGpsNote('Brak GPS w tej przeglądarce.'); return }
+    // Google Play: prominent disclosure PRZED prośbą o uprawnienie lokalizacji
+    // w tle (tylko apka natywna, jednorazowo). Po akceptacji wracamy tutaj.
+    if (needsLocationDisclosure()) { setDisclosureFor(id); return }
     setGpsNote('Szukam pozycji GPS… (zezwól na lokalizację)')
-    watchRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
+    watchRef.current = watchGeoPosition(
+      (fix) => {
         setGpsNote(null)
-        const acc = pos.coords.accuracy
+        const acc = fix.accuracy
         // Drop poor-fix readings client-side: a wide accuracy radius drifts
         // several metres while standing still and would mint phantom points.
         if (typeof acc === 'number' && acc > 35) return
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
+        const { lat, lng } = fix
         // Ślad na mapę live — niezależny od throttle'u wysyłki pingów poniżej,
         // bo tylko rysuje trasę i nie wpływa na punktację (tę liczy serwer).
         setMyTrack((prev) => [...prev, { lat, lng }].slice(-500))
@@ -285,15 +288,14 @@ export function Walk() {
         if (now - lastSentRef.current < 4000) return
         lastSentRef.current = now
         seqRef.current += 1
-        socketRef.current?.sendPing(id, seqRef.current, lat, lng, acc)
+        socketRef.current?.sendPing(id, seqRef.current, lat, lng, acc ?? undefined)
       },
-      (err) => setGpsNote(`GPS niedostępny: ${err.message}. Włącz lokalizację i odśwież.`),
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
+      (message) => setGpsNote(message),
     )
   }
 
   const stopStreaming = () => {
-    if (watchRef.current != null) { navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null }
+    watchRef.current?.stop(); watchRef.current = null
     socketRef.current?.close(); socketRef.current = null
     if (timer.current) window.clearInterval(timer.current)
   }
@@ -344,6 +346,47 @@ export function Walk() {
   return (
     <div>
       <ScreenHeader title="Spacer" icon={<Footprints size={22} />} subtitle="Każdy krok to punkty. We dwoje i na łonie natury — jeszcze więcej." />
+
+      {/* prominent disclosure — wymóg Google Play przy lokalizacji w tle (tylko apka natywna) */}
+      {disclosureFor && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 px-6" role="dialog" aria-modal="true">
+          <Card className="w-full max-w-sm p-5">
+            <div className="flex items-center gap-2 text-deep">
+              <MapPin size={20} weight="fill" />
+              <span className="font-display text-lg font-bold">Lokalizacja podczas spaceru</span>
+            </div>
+            <p className="mt-2 text-sm text-muted">
+              SeaSteps zbiera Twoją pozycję GPS <strong>w trakcie aktywnego spaceru</strong> —
+              także przy zgaszonym ekranie (zobaczysz powiadomienie systemowe) — żeby liczyć
+              trasę, punkty i pokazywać Cię uczestnikom tej samej sesji. Poza spacerem
+              lokalizacja nie jest zbierana. Szczegóły w{' '}
+              <a href="https://seasteps.pl/privacy.html" target="_blank" rel="noopener" className="font-bold text-sea underline">polityce prywatności</a>.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setDisclosureFor(null)}
+                className="flex-1 rounded-2xl border border-white/70 bg-white/60 py-2.5 text-sm font-bold text-muted transition active:scale-[0.98]"
+              >
+                Nie teraz
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = disclosureFor
+                  markLocationDisclosureAccepted()
+                  setDisclosureFor(null)
+                  if (id) startGps(id)
+                }}
+                className="flex-1 rounded-2xl bg-gradient-to-br from-sea to-deep py-2.5 text-sm font-bold text-white transition active:scale-[0.98]"
+              >
+                Rozumiem, włącz GPS
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       <div className="px-5">
         <AnimatePresence mode="wait">
           {/* ── AUTH ── */}
