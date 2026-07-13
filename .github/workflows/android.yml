@@ -1,0 +1,70 @@
+# Build podpisanego AAB (Android App Bundle) dla Google Play — spec 2026-07-13.
+#
+# Ręczne uruchomienie (gh workflow run android.yml). Artifact: SeaSteps-aab.
+# Lokalnie nie ma Javy/Android SDK — jedyna ścieżka builda to ten workflow.
+#
+# Sekrety: ANDROID_KEYSTORE_B64 (PKCS12, alias `upload`), ANDROID_KEYSTORE_PASS.
+# Zmienne (vars): VITE_API_BASE, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY —
+# wartości publiczne (i tak są w bundlu przeglądarkowym), wpięte przy buildzie.
+name: android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-aab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Build web bundle (base=/) and sync Capacitor
+        working-directory: web
+        env:
+          VITE_BASE: /
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          # index.html hardkoduje /app/ dla favicon/manifest (deploy webowy);
+          # w natywnym webview bundle stoi w rootcie.
+          sed -i 's| href="/app/| href="/|g' dist/index.html
+          npx cap sync android
+
+      - name: Decode upload keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload-keystore.p12"
+
+      - name: Gradle bundleRelease (signed)
+        working-directory: web/android
+        env:
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          chmod +x gradlew
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/upload-keystore.p12" \
+            -Pandroid.injected.signing.store.password="$KEYSTORE_PASS" \
+            -Pandroid.injected.signing.key.alias=upload \
+            -Pandroid.injected.signing.key.password="$KEYSTORE_PASS"
+
+      - name: Rename artifact
+        run: cp web/android/app/build/outputs/bundle/release/app-release.aab SeaSteps.aab
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SeaSteps-aab
+          path: SeaSteps.aab
+          retention-days: 30
