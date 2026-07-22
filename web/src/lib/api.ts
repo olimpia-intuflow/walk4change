@@ -2,7 +2,8 @@
  * SeaSteps — warstwa danych.
  *
  * Mnożniki punktów (zgodne ze scoring engine backendu):
- *   spacer z kimś ×1.5, strefa natury ×3 — i one się mnożą (stackują).
+ *   100 m = 1 pkt bazowo; z kimś ×1.5 (para) / ×2 (grupa 3+), strefa natury ×3 —
+ *   i one się mnożą (stackują). Kanon: backend/crates/api/src/scoring/.
  */
 
 import { apiRequest, API_BASE, hasBackend } from './http'
@@ -122,18 +123,28 @@ const DEMO_USER_IDS = new Set([
 ])
 
 // ── Scoring (lokalny, lustro silnika backendu) ────────────
-export const MULTIPLIER = { together: 1.5, nature: 3 } as const
+// Źródło prawdy: backend/crates/api/src/scoring/{config,engine}.rs
+// (punkty w UI zawsze przychodzą z serwera; ta funkcja służy tylko do
+// lokalnego podglądu i MUSI liczyć tym samym wzorem co backend).
+export const METERS_PER_POINT = 100
+export const MULTIPLIER = { solo: 1, pair: 1.5, group: 2, nature: 3 } as const
+
+/** Mnożnik za towarzystwo: 0 osób → ×1, 1 osoba → ×1.5, 2+ → ×2 (jak together_mult w engine.rs). */
+export function togetherMultiplier(companions: number): number {
+  if (companions <= 0) return MULTIPLIER.solo
+  if (companions === 1) return MULTIPLIER.pair
+  return MULTIPLIER.group
+}
 
 export function computeWalkPoints(opts: {
-  steps: number
-  withSomeone: boolean
+  meters: number
+  /** ile osób idzie ze mną (0 = solo) */
+  companions: number
   inNature: boolean
 }): { base: number; total: number; multiplier: number } {
-  const base = Math.round(opts.steps / 20) // ~1 pkt za 20 kroków
-  let multiplier = 1
-  if (opts.withSomeone) multiplier *= MULTIPLIER.together
-  if (opts.inNature) multiplier *= MULTIPLIER.nature
-  return { base, total: Math.round(base * multiplier), multiplier }
+  const base = opts.meters / METERS_PER_POINT // 100 m = 1 pkt
+  const multiplier = (opts.inNature ? MULTIPLIER.nature : 1) * togetherMultiplier(opts.companions)
+  return { base: Math.round(base), total: Math.round(base * multiplier), multiplier }
 }
 
 const today: TodayStats = {
